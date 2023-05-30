@@ -15,6 +15,14 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ldtk_handle,
         ..Default::default()
     });
+
+    // Use only the subset of sprites in the sheet that make up the run animation
+    let animation_indices = AnimationIndices { first: 1, last: 6 };
+    commands.insert_resource(animation_indices);
+    commands.insert_resource(AnimationTimer(Timer::from_seconds(
+        0.1,
+        TimerMode::Repeating,
+    )));
 }
 
 pub fn movement(input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Player>>) {
@@ -24,8 +32,8 @@ pub fn movement(input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With
         let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
         let down = if input.pressed(KeyCode::S) { 1. } else { 0. };
 
-        velocity.linvel.x = (right - left) * 200.;
-        velocity.linvel.y = (up - down) * 200.;
+        velocity.linvel.x = (right - left) * 100.;
+        velocity.linvel.y = (up - down) * 100.;
     }
 }
 
@@ -286,6 +294,43 @@ pub fn update_level_selection(
                     *level_selection = LevelSelection::Iid(ldtk_level.level.iid.clone());
                 }
             }
+        }
+    }
+}
+
+pub fn animate_sprite(
+    input: Res<Input<KeyCode>>,
+    time: Res<Time>,
+    indices: Res<AnimationIndices>,
+    mut timer: ResMut<AnimationTimer>,
+    mut query: Query<&mut TextureAtlasSprite, With<Player>>,
+) {
+    if !input.pressed(KeyCode::D)
+        && !input.pressed(KeyCode::S)
+        && !input.pressed(KeyCode::W)
+        && !input.pressed(KeyCode::A)
+    {
+        for mut sprite in &mut query {
+            sprite.index = 0;
+            return;
+        }
+    }
+
+    for mut sprite in &mut query {
+        timer.tick(time.delta());
+        if timer.just_finished() {
+            if input.pressed(KeyCode::A) {
+                sprite.flip_x = true;
+            }
+            if input.pressed(KeyCode::D) {
+                sprite.flip_x = false;
+            }
+
+            sprite.index = if sprite.index == indices.last {
+                indices.first
+            } else {
+                sprite.index + 1
+            };
         }
     }
 }

@@ -40,9 +40,9 @@ pub struct Player;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
-    #[sprite_bundle("player.png")]
+    #[sprite_sheet_bundle("gabe-idle-run.png", 24.0, 24.0, 7, 1, 0.0, 0.0, 0)]
     #[bundle]
-    pub sprite_bundle: SpriteBundle,
+    pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]
     #[bundle]
     pub collider_bundle: ColliderBundle,
@@ -62,3 +62,12 @@ pub struct Wall;
 pub struct WallBundle {
     wall: Wall,
 }
+
+#[derive(Resource, Default, Clone)]
+pub struct AnimationIndices {
+    pub first: usize,
+    pub last: usize,
+}
+
+#[derive(Resource, Deref, DerefMut, Default, Clone)]
+pub struct AnimationTimer(pub Timer);
