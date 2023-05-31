@@ -40,7 +40,7 @@ pub struct Player;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
-    #[sprite_sheet_bundle("gabe-idle-run.png", 24.0, 24.0, 7, 1, 0.0, 0.0, 0)]
+    #[sprite_sheet_bundle("Tiny16-ExpandedMaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
     #[bundle]
     pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]

@@ -25,7 +25,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 pub fn set_player(mut query: Query<&mut AnimationIndices, With<Player>>) {
     for mut animation_indices in &mut query {
         animation_indices.first = 1;
-        animation_indices.last = 6;
+        animation_indices.last = 5;
     }
 }
 
@@ -322,18 +322,25 @@ pub fn animate_sprite(
     for (mut sprite, indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
-            if input.pressed(KeyCode::A) {
-                sprite.flip_x = true;
-            }
-            if input.pressed(KeyCode::D) {
-                sprite.flip_x = false;
-            }
-
-            sprite.index = if sprite.index == indices.last {
+            let mut temp_index = sprite.index % 6;
+            temp_index = if temp_index == indices.last {
                 indices.first
             } else {
-                sprite.index + 1
+                temp_index + 1
             };
+
+            if input.pressed(KeyCode::S) {
+                sprite.index = temp_index;
+            }
+            if input.pressed(KeyCode::A) {
+                sprite.index = 6 + temp_index;
+            }
+            if input.pressed(KeyCode::D) {
+                sprite.index = 12 + temp_index;
+            }
+            if input.pressed(KeyCode::W) {
+                sprite.index = 18 + temp_index;
+            }
         }
     }
 }
