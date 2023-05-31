@@ -69,6 +69,17 @@ pub struct WallBundle {
 pub struct AnimationIndices {
     pub first: usize,
     pub last: usize,
+    pub animation_state: AnimationState,
+}
+
+#[derive(Component, Default, Clone, PartialEq, Eq)]
+pub enum AnimationState {
+    #[default]
+    Idle,
+    WalkDown,
+    WalkLeft,
+    WalkRight,
+    WalkUp,
 }
 
 #[derive(Resource, Deref, DerefMut, Default, Clone)]

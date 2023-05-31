@@ -26,11 +26,15 @@ pub fn set_player(mut query: Query<&mut AnimationIndices, With<Player>>) {
     for mut animation_indices in &mut query {
         animation_indices.first = 1;
         animation_indices.last = 5;
+        animation_indices.animation_state = AnimationState::Idle;
     }
 }
 
-pub fn movement(input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Player>>) {
-    for mut velocity in &mut query {
+pub fn movement(
+    input: Res<Input<KeyCode>>,
+    mut query: Query<(&mut Velocity, &mut AnimationIndices), With<Player>>,
+) {
+    for (mut velocity, mut indices) in &mut query {
         let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
         let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
         let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
@@ -38,6 +42,16 @@ pub fn movement(input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With
 
         velocity.linvel.x = (right - left) * 100.;
         velocity.linvel.y = (up - down) * 100.;
+
+        if input.pressed(KeyCode::D) {
+            indices.animation_state = AnimationState::WalkRight;
+        } else if input.pressed(KeyCode::A) {
+            indices.animation_state = AnimationState::WalkLeft;
+        } else if input.pressed(KeyCode::W) {
+            indices.animation_state = AnimationState::WalkUp;
+        } else if input.pressed(KeyCode::S) {
+            indices.animation_state = AnimationState::WalkDown;
+        }
     }
 }
 
@@ -303,25 +317,17 @@ pub fn update_level_selection(
 }
 
 pub fn animate_sprite(
-    input: Res<Input<KeyCode>>,
     time: Res<Time>,
     mut timer: ResMut<AnimationTimer>,
     mut query: Query<(&mut TextureAtlasSprite, &mut AnimationIndices), With<Player>>,
 ) {
-    if !input.pressed(KeyCode::D)
-        && !input.pressed(KeyCode::S)
-        && !input.pressed(KeyCode::W)
-        && !input.pressed(KeyCode::A)
-    {
-        for (mut sprite, _) in &mut query {
-            sprite.index = 0;
-            return;
-        }
-    }
-
     for (mut sprite, indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
+            if indices.animation_state == AnimationState::Idle {
+                sprite.index = (sprite.index / 6) * 6;
+                return;
+            }
             let mut temp_index = sprite.index % 6;
             temp_index = if temp_index == indices.last {
                 indices.first
@@ -329,16 +335,16 @@ pub fn animate_sprite(
                 temp_index + 1
             };
 
-            if input.pressed(KeyCode::S) {
+            if indices.animation_state == AnimationState::WalkDown {
                 sprite.index = temp_index;
             }
-            if input.pressed(KeyCode::A) {
+            if indices.animation_state == AnimationState::WalkLeft {
                 sprite.index = 6 + temp_index;
             }
-            if input.pressed(KeyCode::D) {
+            if indices.animation_state == AnimationState::WalkRight {
                 sprite.index = 12 + temp_index;
             }
-            if input.pressed(KeyCode::W) {
+            if indices.animation_state == AnimationState::WalkUp {
                 sprite.index = 18 + temp_index;
             }
         }
