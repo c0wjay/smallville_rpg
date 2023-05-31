@@ -16,6 +16,10 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         // Required to prevent race conditions between bevy_ecs_ldtk's and bevy_rapier's systems
         .configure_set(LdtkSystemSet::ProcessApi.before(PhysicsSet::SyncBackend))
+        .insert_resource(RapierConfiguration {
+            gravity: Vec2::new(0.0, 0.0),
+            ..default()
+        })
         .insert_resource(LevelSelection::Uid(109))
         .insert_resource(LdtkSettings {
             level_spawn_behavior: LevelSpawnBehavior::UseWorldTranslation {
@@ -33,6 +37,7 @@ fn main() {
         // .add_system(systems::dbg_player_items)
         .register_ldtk_int_cell::<components::WallBundle>(1)
         .register_ldtk_entity::<components::PlayerBundle>("Player")
+        .register_ldtk_entity::<components::NPCBundle>("NPC")
         .add_system(systems::set_player)
         .run();
 }

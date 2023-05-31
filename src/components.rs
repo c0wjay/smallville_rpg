@@ -22,7 +22,16 @@ impl From<&EntityInstance> for ColliderBundle {
             "Player" => ColliderBundle {
                 collider: Collider::cuboid(4., 4.),
                 rigid_body: RigidBody::Dynamic,
-                gravity_scale: GravityScale(0.0),
+                friction: Friction {
+                    coefficient: 0.0,
+                    combine_rule: CoefficientCombineRule::Min,
+                },
+                rotation_constraints,
+                ..Default::default()
+            },
+            "NPC" => ColliderBundle {
+                collider: Collider::cuboid(4., 4.),
+                rigid_body: RigidBody::Dynamic,
                 friction: Friction {
                     coefficient: 0.0,
                     combine_rule: CoefficientCombineRule::Min,
@@ -47,6 +56,28 @@ pub struct PlayerBundle {
     #[bundle]
     pub collider_bundle: ColliderBundle,
     pub player: Player,
+    #[worldly]
+    pub worldly: Worldly,
+
+    pub animation_indices: AnimationIndices,
+
+    // The whole EntityInstance can be stored directly as an EntityInstance component
+    #[from_entity_instance]
+    entity_instance: EntityInstance,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
+pub struct NPC;
+
+#[derive(Clone, Default, Bundle, LdtkEntity)]
+pub struct NPCBundle {
+    #[sprite_sheet_bundle("Tiny16-ExpandedFemaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
+    #[bundle]
+    pub sprite_sheet_bundle: SpriteSheetBundle,
+    #[from_entity_instance]
+    #[bundle]
+    pub collider_bundle: ColliderBundle,
+    pub npc: NPC,
     #[worldly]
     pub worldly: Worldly,
 
