@@ -33,5 +33,6 @@ fn main() {
         // .add_system(systems::dbg_player_items)
         .register_ldtk_int_cell::<components::WallBundle>(1)
         .register_ldtk_entity::<components::PlayerBundle>("Player")
+        .add_system(systems::set_player)
         .run();
 }

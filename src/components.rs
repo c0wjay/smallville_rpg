@@ -50,6 +50,8 @@ pub struct PlayerBundle {
     #[worldly]
     pub worldly: Worldly,
 
+    pub animation_indices: AnimationIndices,
+
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
@@ -63,7 +65,7 @@ pub struct WallBundle {
     wall: Wall,
 }
 
-#[derive(Resource, Default, Clone)]
+#[derive(Component, Default, Clone)]
 pub struct AnimationIndices {
     pub first: usize,
     pub last: usize,
