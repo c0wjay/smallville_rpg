@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
-
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::prelude::*;
 
 mod components;
@@ -39,5 +39,7 @@ fn main() {
         .register_ldtk_entity::<components::PlayerBundle>("Player")
         .register_ldtk_entity::<components::NPCBundle>("NPC")
         .add_system(systems::set_player)
+        .add_system(systems::y_sort)
+        .add_plugin(WorldInspectorPlugin::new())
         .run();
 }

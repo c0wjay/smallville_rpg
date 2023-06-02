@@ -12,7 +12,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let ldtk_handle = asset_server.load("Typical_TopDown_example.ldtk");
     commands.spawn(LdtkWorldBundle {
-        ldtk_handle,
+        ldtk_handle: ldtk_handle,
         ..Default::default()
     });
 
@@ -22,11 +22,14 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     )));
 }
 
-pub fn set_player(mut query: Query<&mut AnimationIndices, With<Player>>) {
-    for mut animation_indices in &mut query {
+pub fn set_player(
+    mut query: Query<(&mut AnimationIndices, &mut YSort), Or<(With<Player>, With<NPC>)>>,
+) {
+    for (mut animation_indices, mut ysort) in &mut query {
         animation_indices.first = 1;
         animation_indices.last = 5;
         animation_indices.animation_state = AnimationState::Idle;
+        ysort.z = 5.0;
     }
 }
 
@@ -348,5 +351,11 @@ pub fn animate_sprite(
                 sprite.index = 18 + temp_index;
             }
         }
+    }
+}
+
+pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
+    for (mut tf, ysort) in q.iter_mut() {
+        tf.translation.z = ysort.z - (1.0f32 / (1.0f32 + (2.0f32.powf(-0.01 * tf.translation.y))));
     }
 }

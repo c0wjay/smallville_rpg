@@ -7,6 +7,7 @@ use bevy_rapier2d::prelude::*;
 pub struct ColliderBundle {
     pub collider: Collider,
     pub rigid_body: RigidBody,
+    pub damping: Damping,
     pub velocity: Velocity,
     pub rotation_constraints: LockedAxes,
     pub gravity_scale: GravityScale,
@@ -36,6 +37,10 @@ impl From<&EntityInstance> for ColliderBundle {
                     coefficient: 0.0,
                     combine_rule: CoefficientCombineRule::Min,
                 },
+                damping: Damping {
+                    linear_damping: 100.0,
+                    angular_damping: 0.0,
+                },
                 rotation_constraints,
                 ..Default::default()
             },
@@ -60,7 +65,7 @@ pub struct PlayerBundle {
     pub worldly: Worldly,
 
     pub animation_indices: AnimationIndices,
-
+    pub ysort: YSort,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
@@ -82,7 +87,7 @@ pub struct NPCBundle {
     pub worldly: Worldly,
 
     pub animation_indices: AnimationIndices,
-
+    pub ysort: YSort,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
@@ -115,3 +120,8 @@ pub enum AnimationState {
 
 #[derive(Resource, Deref, DerefMut, Default, Clone)]
 pub struct AnimationTimer(pub Timer);
+
+#[derive(Component, Default, Clone, Debug)]
+pub struct YSort {
+    pub z: f32,
+}
