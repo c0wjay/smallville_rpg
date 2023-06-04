@@ -1,8 +1,11 @@
 use crate::components::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::VisibilityPlugin, utils::tracing::event};
 use bevy_ecs_ldtk::prelude::*;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use bevy_rapier2d::prelude::*;
 
@@ -35,9 +38,9 @@ pub fn set_player(
 
 pub fn movement(
     input: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Velocity, &mut AnimationIndices), With<Player>>,
+    mut query: Query<(&mut Velocity, &mut Facing, &mut AnimationIndices), With<Player>>,
 ) {
-    for (mut velocity, mut indices) in &mut query {
+    for (mut velocity, mut facing, mut indices) in &mut query {
         let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
         let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
         let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
@@ -45,15 +48,18 @@ pub fn movement(
 
         velocity.linvel.x = (right - left) * 100.;
         velocity.linvel.y = (up - down) * 100.;
-
         if input.pressed(KeyCode::D) {
-            indices.animation_state = AnimationState::WalkRight;
+            indices.animation_state = AnimationState::Walk;
+            facing.direction = FaceDirection::Right;
         } else if input.pressed(KeyCode::A) {
-            indices.animation_state = AnimationState::WalkLeft;
+            indices.animation_state = AnimationState::Walk;
+            facing.direction = FaceDirection::Left;
         } else if input.pressed(KeyCode::W) {
-            indices.animation_state = AnimationState::WalkUp;
+            indices.animation_state = AnimationState::Walk;
+            facing.direction = FaceDirection::Up;
         } else if input.pressed(KeyCode::S) {
-            indices.animation_state = AnimationState::WalkDown;
+            indices.animation_state = AnimationState::Walk;
+            facing.direction = FaceDirection::Down;
         }
     }
 }
@@ -319,18 +325,30 @@ pub fn update_level_selection(
     }
 }
 
+// pub fn sprite_size(mut query: Query<&mut TextureAtlasSprite, Or<(With<Player>, With<NPC>)>>) {
+//     for mut sprite in &mut query {
+//         sprite.custom_size = Some(Vec2::new(24., 24.));
+//     }
+// }
+
 pub fn animate_sprite(
     time: Res<Time>,
     mut timer: ResMut<AnimationTimer>,
-    mut query: Query<(&mut TextureAtlasSprite, &mut AnimationIndices), With<Player>>,
+    mut query: Query<(&mut TextureAtlasSprite, &Facing, &mut AnimationIndices), With<Player>>,
 ) {
-    for (mut sprite, indices) in &mut query {
+    for (mut sprite, facing, indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
             if indices.animation_state == AnimationState::Idle {
-                sprite.index = (sprite.index / 6) * 6;
+                match facing.direction {
+                    FaceDirection::Down => sprite.index = 0,
+                    FaceDirection::Left => sprite.index = 6,
+                    FaceDirection::Right => sprite.index = 12,
+                    FaceDirection::Up => sprite.index = 18,
+                }
                 return;
             }
+
             let mut temp_index = sprite.index % 6;
             temp_index = if temp_index == indices.last {
                 indices.first
@@ -338,18 +356,12 @@ pub fn animate_sprite(
                 temp_index + 1
             };
 
-            if indices.animation_state == AnimationState::WalkDown {
-                sprite.index = temp_index;
-            }
-            if indices.animation_state == AnimationState::WalkLeft {
-                sprite.index = 6 + temp_index;
-            }
-            if indices.animation_state == AnimationState::WalkRight {
-                sprite.index = 12 + temp_index;
-            }
-            if indices.animation_state == AnimationState::WalkUp {
-                sprite.index = 18 + temp_index;
-            }
+            sprite.index = match facing.direction {
+                FaceDirection::Down => temp_index,
+                FaceDirection::Left => 6 + temp_index,
+                FaceDirection::Right => 12 + temp_index,
+                FaceDirection::Up => 18 + temp_index,
+            };
         }
     }
 }
@@ -357,5 +369,133 @@ pub fn animate_sprite(
 pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
     for (mut tf, ysort) in q.iter_mut() {
         tf.translation.z = ysort.z - (1.0f32 / (1.0f32 + (2.0f32.powf(-0.01 * tf.translation.y))));
+    }
+}
+
+pub fn punching(
+    input: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut fighters: Query<(
+        &mut MoveLock,
+        &Facing,
+        &mut Velocity,
+        &mut AttackTimer,
+        Entity,
+        &Player,
+    )>,
+    time: Res<Time>,
+) {
+    for (mut movelock, facing, mut velocity, mut timer, entity, player) in &mut fighters {
+        timer.tick(time.delta());
+        if input.pressed(KeyCode::Space) && !movelock.0 {
+            const MOVE_BACKWARD: f32 = 100.;
+            match facing.direction {
+                FaceDirection::Down => velocity.linvel.y = MOVE_BACKWARD,
+                FaceDirection::Left => velocity.linvel.x = MOVE_BACKWARD,
+                FaceDirection::Right => velocity.linvel.x = -MOVE_BACKWARD,
+                FaceDirection::Up => velocity.linvel.y = -MOVE_BACKWARD,
+            }
+
+            info!("{:?} Entity: {:?}", player, entity);
+            // Spawn the attack entity
+            let attack_entity = commands
+                .spawn(CollisionGroups::new(
+                    BodyLayers::PLAYER_ATTACK,
+                    BodyLayers::ENEMY,
+                ))
+                .insert(Attack {
+                    damage: 1,
+                    pushback: Vec2::ZERO,
+                    hitstun_duration: 1.,
+                })
+                .id();
+            *timer = AttackTimer(Timer::from_seconds(0.5, TimerMode::Once));
+            commands.entity(entity).push_children(&[attack_entity]);
+            info!("Spawned attack entity: {:?}", attack_entity);
+
+            movelock.0 = true;
+        }
+
+        if timer.0.finished() && movelock.0 {
+            movelock.0 = false;
+            const MOVE_FRONT: f32 = 300.;
+            match facing.direction {
+                FaceDirection::Down => velocity.linvel.y = -MOVE_FRONT,
+                FaceDirection::Left => velocity.linvel.x = -MOVE_FRONT,
+                FaceDirection::Right => velocity.linvel.x = MOVE_FRONT,
+                FaceDirection::Up => velocity.linvel.y = MOVE_FRONT,
+            }
+            timer.set_duration(Duration::from_secs_f32(0.1));
+        }
+    }
+}
+
+pub fn attack_system(
+    mut commands: Commands,
+    mut events: EventReader<CollisionEvent>,
+    attacks: Query<(&Parent, Entity, &Attack)>,
+    hurtboxes: Query<&Parent, With<Hurtbox>>,
+    mut event_writer: EventWriter<DamageEvent>,
+) {
+    for event in events.iter() {
+        info!("Event: {:?}", event);
+        if let CollisionEvent::Started(e1, e2, _flags) = event {
+            for (attacker, _, attack) in attacks.iter() {
+                let (attacker_entity, hurtbox_entity) = if attacker.get() == *e1 {
+                    (*e1, *e2)
+                } else if attacker.get() == *e2 {
+                    (*e2, *e1)
+                } else {
+                    continue;
+                };
+                info!("Attacker: {:?}", attacker_entity);
+                info!("Attack: {:?}", attack);
+
+                if attacker_entity.eq(e1) | attacker_entity.eq(e2) {
+                    event_writer.send(DamageEvent {
+                        damageing_entity: attacker_entity,
+                        damage_velocity: attack.pushback,
+                        damage: attack.damage,
+                        damaged_entity: hurtbox_entity,
+                        hitstun_duration: attack.hitstun_duration,
+                    });
+                    break;
+                }
+                info!("message should not be shown");
+            }
+        }
+    }
+}
+
+pub fn collect_hit(
+    mut npc: Query<&mut Visibility, With<NPC>>,
+    mut damage_events: EventReader<DamageEvent>,
+) {
+    for event in damage_events.iter() {
+        info!("Damage event: {:?}", event);
+        if let Ok(mut visibility) = npc.get_mut(event.damaged_entity) {
+            info!("NPC {:?} hit {:?}", event.damaged_entity, visibility);
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+pub fn deactivate_attack(
+    mut commands: Commands,
+    attacks: Query<(&Parent, Entity, &Attack)>,
+    mut player: Query<&mut AttackTimer, With<Player>>,
+    time: Res<Time>,
+) {
+    for (parent, entity, attack) in attacks.iter() {
+        let timer = player.get_mut(parent.get());
+        if !timer.is_err() {
+            let timer = &mut timer.unwrap().0;
+            // info!("Timer: {:?}", timer);
+            timer.tick(time.delta());
+            if timer.finished() {
+                warn!("Attack {:?} finished", entity);
+                commands.entity(entity).despawn_recursive();
+            }
+        }
     }
 }

@@ -31,6 +31,7 @@ fn main() {
         .add_startup_system(systems::setup)
         .add_system(systems::spawn_wall_collision)
         .add_system(systems::movement)
+        // .add_system(systems::sprite_size)
         .add_system(systems::animate_sprite)
         .add_system(systems::camera_fit_inside_current_level)
         .add_system(systems::update_level_selection)
@@ -38,8 +39,16 @@ fn main() {
         .register_ldtk_int_cell::<components::WallBundle>(1)
         .register_ldtk_entity::<components::PlayerBundle>("Player")
         .register_ldtk_entity::<components::NPCBundle>("NPC")
+        // Type should be registered to view in WorldInspector. Components should be derived from `Reflect` and `Clone`.
+        .register_type::<components::Facing>()
+        .register_type::<components::MoveLock>()
         .add_system(systems::set_player)
         .add_system(systems::y_sort)
         .add_plugin(WorldInspectorPlugin::new())
+        .add_event::<components::DamageEvent>()
+        .add_system(systems::punching)
+        .add_system(systems::attack_system)
+        .add_system(systems::collect_hit)
+        .add_system(systems::deactivate_attack)
         .run();
 }
