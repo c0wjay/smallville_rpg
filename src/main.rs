@@ -3,12 +3,14 @@
 
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
 use bevy_rapier2d::prelude::*;
 
 mod components;
+mod map;
 mod systems;
 
+// TODO: need to be moduled by plugins.
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
@@ -28,6 +30,7 @@ fn main() {
             set_clear_color: SetClearColor::FromLevelBackground,
             ..Default::default()
         })
+        .insert_resource(map::EntityMap::new())
         .add_startup_system(systems::setup)
         .add_system(systems::spawn_wall_collision)
         .add_system(systems::movement)
@@ -42,9 +45,13 @@ fn main() {
         // Type should be registered to view in WorldInspector. Components should be derived from `Reflect` and `Clone`.
         .register_type::<components::Facing>()
         .register_type::<components::MoveLock>()
+        .register_type::<components::Coordinate>()
         .add_system(systems::set_player)
         .add_system(systems::y_sort)
         .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(ResourceInspectorPlugin::<map::EntityMap>::new())
+        .add_system(systems::coordinate_setup)
+        .add_system(systems::change_coordinate_of_moved_entity)
         .add_event::<components::DamageEvent>()
         .add_system(systems::punching)
         .add_system(systems::attack_system)

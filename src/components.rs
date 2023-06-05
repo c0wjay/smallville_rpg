@@ -3,6 +3,8 @@ use bevy_ecs_ldtk::prelude::*;
 
 use bevy_rapier2d::prelude::*;
 
+// TODO: components should be moduled in part.
+
 #[derive(Clone, Debug, Bundle, LdtkIntCell)]
 pub struct ColliderBundle {
     pub collider: Collider,
@@ -80,6 +82,12 @@ impl From<&EntityInstance> for ColliderBundle {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Player;
 
+#[derive(Copy, Clone, Debug, Default, Component, Reflect)]
+pub struct Coordinate {
+    pub x: i32,
+    pub y: i32,
+}
+
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
     #[sprite_sheet_bundle("Tiny16-ExpandedMaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
@@ -96,6 +104,7 @@ pub struct PlayerBundle {
     pub ysort: YSort,
     pub timer: AttackTimer,
     pub move_lock: MoveLock,
+    pub coordinate: Coordinate,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
@@ -126,6 +135,7 @@ pub struct NPCBundle {
     pub animation_indices: AnimationIndices,
     pub ysort: YSort,
     pub hurtbox: Hurtbox,
+    pub coordinate: Coordinate,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
@@ -170,6 +180,7 @@ pub enum FaceDirection {
     Right,
 }
 
+// TODO: need to be combined with AttackTimer, and it needs to be component not resource.
 #[derive(Resource, Deref, DerefMut, Default, Clone)]
 pub struct AnimationTimer(pub Timer);
 
@@ -198,6 +209,11 @@ pub struct DamageEvent {
     pub damaged_entity: Entity,
     pub damage: i32,
     pub hitstun_duration: f32,
+}
+
+#[derive(Debug)]
+pub struct MovementEvent {
+    pub moved_entity: Entity,
 }
 
 #[derive(Component, Default, Clone)]

@@ -1,4 +1,5 @@
 use crate::components::*;
+use crate::map::*;
 use bevy::{prelude::*, render::view::VisibilityPlugin, utils::tracing::event};
 use bevy_ecs_ldtk::prelude::*;
 
@@ -23,6 +24,27 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         0.1,
         TimerMode::Repeating,
     )));
+}
+
+pub fn coordinate_setup(
+    mut entity_map: ResMut<EntityMap>,
+    mut query: Query<(Entity, &mut Coordinate, &Transform)>,
+) {
+    if entity_map.setup_flag {
+        return;
+    }
+    info!("Coordinate Setup");
+
+    for (entity, mut coordinate, transform) in &mut query {
+        info!("{:?}, {:?}, {:?}", entity, coordinate, transform);
+        // Store coordinates of entities in local component.
+        coordinate.x = transform.translation.x.round() as i32;
+        coordinate.y = transform.translation.y.round() as i32;
+
+        // Store coordinates of entities in global entity map.
+        entity_map.insert((coordinate.x, coordinate.y), entity);
+        entity_map.setup_flag = true;
+    }
 }
 
 pub fn set_player(
@@ -61,6 +83,23 @@ pub fn movement(
             indices.animation_state = AnimationState::Walk;
             facing.direction = FaceDirection::Down;
         }
+    }
+}
+
+pub fn change_coordinate_of_moved_entity(
+    mut entity_map: ResMut<EntityMap>,
+    mut query: Query<(&mut Coordinate, &Transform, Entity), Changed<Transform>>,
+) {
+    for (mut coordinate, transform, entity) in &mut query {
+        // Delete old coordinates of entities in global entity map.
+        entity_map.delete((coordinate.x, coordinate.y), entity);
+
+        // Updating coordinates of entities in local component.
+        coordinate.x = transform.translation.x.round() as i32;
+        coordinate.y = transform.translation.y.round() as i32;
+
+        // Updating coordinates of entities in global entity map.
+        entity_map.insert((coordinate.x, coordinate.y), entity);
     }
 }
 
