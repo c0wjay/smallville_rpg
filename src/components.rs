@@ -6,6 +6,14 @@ use crate::constants::UNIT_SIZE;
 
 // TODO: components should be moduled in part.
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
+pub struct Wall;
+
+#[derive(Clone, Debug, Default, Bundle, LdtkIntCell)]
+pub struct WallBundle {
+    wall: Wall,
+}
+
 #[derive(Clone, Debug, Bundle, LdtkIntCell)]
 pub struct ColliderBundle {
     pub collider: Collider,
@@ -83,11 +91,8 @@ impl From<&EntityInstance> for ColliderBundle {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Player;
 
-#[derive(Copy, Clone, Debug, Default, Component, Reflect)]
-pub struct Coordinate {
-    pub x: i32,
-    pub y: i32,
-}
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
+pub struct NPC;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
@@ -103,23 +108,14 @@ pub struct PlayerBundle {
     pub facing: Facing,
     pub animation_indices: AnimationIndices,
     pub ysort: YSort,
-    pub timer: AttackTimer,
+    pub timer: AnimationTimer,
+    pub delay: Delay,
     pub move_lock: MoveLock,
     pub coordinate: Coordinate,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
 }
-
-#[derive(Component, Deref, DerefMut, Default, Clone, Reflect)]
-pub struct AttackTimer(pub Timer);
-
-#[derive(Component, Default, Clone, Reflect)]
-
-pub struct MoveLock(pub bool);
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
-pub struct NPC;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct NPCBundle {
@@ -135,6 +131,8 @@ pub struct NPCBundle {
     pub facing: Facing,
     pub animation_indices: AnimationIndices,
     pub ysort: YSort,
+    pub timer: AnimationTimer,
+    pub delay: Delay,
     pub hurtbox: Hurtbox,
     pub coordinate: Coordinate,
     // The whole EntityInstance can be stored directly as an EntityInstance component
@@ -142,14 +140,7 @@ pub struct NPCBundle {
     entity_instance: EntityInstance,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
-pub struct Wall;
-
-#[derive(Clone, Debug, Default, Bundle, LdtkIntCell)]
-pub struct WallBundle {
-    wall: Wall,
-}
-
+// TODO: AnimationIndices, Animation State, Facing, AnimationTimer should be bundled as AnimationBundle.
 #[derive(Component, Default, Clone)]
 pub struct AnimationIndices {
     pub first: usize,
@@ -181,9 +172,34 @@ pub enum FaceDirection {
     Right,
 }
 
-// TODO: need to be combined with AttackTimer, and it needs to be component not resource.
-#[derive(Resource, Deref, DerefMut, Default, Clone)]
+// TODO: need to be combined with Delay, and it needs to be component not resource.
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
 pub struct AnimationTimer(pub Timer);
+
+impl Default for AnimationTimer {
+    fn default() -> Self {
+        AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating))
+    }
+}
+
+#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+pub struct Delay(pub Timer);
+
+impl Default for Delay {
+    fn default() -> Self {
+        Delay(Timer::from_seconds(0.5, TimerMode::Once))
+    }
+}
+
+#[derive(Component, Default, Clone, Reflect)]
+
+pub struct MoveLock(pub bool);
+
+#[derive(Copy, Clone, Debug, Default, Component, Reflect)]
+pub struct Coordinate {
+    pub x: i32,
+    pub y: i32,
+}
 
 #[derive(Component, Default, Clone, Debug)]
 pub struct YSort {

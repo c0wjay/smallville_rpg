@@ -21,11 +21,6 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ldtk_handle: ldtk_handle,
         ..Default::default()
     });
-
-    commands.insert_resource(AnimationTimer(Timer::from_seconds(
-        0.1,
-        TimerMode::Repeating,
-    )));
 }
 
 pub fn coordinate_setup(
@@ -380,10 +375,17 @@ pub fn update_level_selection(
 
 pub fn animate_sprite(
     time: Res<Time>,
-    mut timer: ResMut<AnimationTimer>,
-    mut query: Query<(&mut TextureAtlasSprite, &Facing, &mut AnimationIndices), With<Player>>,
+    mut query: Query<
+        (
+            &mut AnimationTimer,
+            &mut TextureAtlasSprite,
+            &Facing,
+            &mut AnimationIndices,
+        ),
+        With<Player>,
+    >,
 ) {
-    for (mut sprite, facing, indices) in &mut query {
+    for (mut timer, mut sprite, facing, indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
             if indices.animation_state == AnimationState::Idle {
@@ -426,14 +428,14 @@ pub fn punching(
         &mut MoveLock,
         &Facing,
         &mut Velocity,
-        &mut AttackTimer,
+        &mut Delay,
         Entity,
         &Player,
     )>,
     time: Res<Time>,
 ) {
-    for (mut movelock, facing, mut velocity, mut timer, entity, player) in &mut fighters {
-        timer.tick(time.delta());
+    for (mut movelock, facing, mut velocity, mut delay, entity, player) in &mut fighters {
+        delay.tick(time.delta());
         if input.pressed(KeyCode::Space) && !movelock.0 {
             // const MOVE_FRONT: f32 = 100.;
             // match facing.direction {
@@ -456,14 +458,14 @@ pub fn punching(
                     hitstun_duration: 1.,
                 })
                 .id();
-            *timer = AttackTimer(Timer::from_seconds(0.5, TimerMode::Once));
+            *delay = Delay(Timer::from_seconds(0.5, TimerMode::Once));
             commands.entity(entity).push_children(&[attack_entity]);
             info!("Spawned attack entity: {:?}", attack_entity);
 
             movelock.0 = true;
         }
 
-        if timer.0.finished() && movelock.0 {
+        if delay.0.finished() && movelock.0 {
             movelock.0 = false;
         }
     }
@@ -567,16 +569,16 @@ pub fn collect_hit(
 pub fn deactivate_attack(
     mut commands: Commands,
     attacks: Query<(&Parent, Entity, &Attack)>,
-    mut player: Query<&mut AttackTimer, With<Player>>,
+    mut player: Query<&mut Delay, With<Player>>,
     time: Res<Time>,
 ) {
     for (parent, entity, attack) in attacks.iter() {
-        let timer = player.get_mut(parent.get());
-        if !timer.is_err() {
-            let timer = &mut timer.unwrap().0;
+        let delay = player.get_mut(parent.get());
+        if !delay.is_err() {
+            let delay = &mut delay.unwrap().0;
             // info!("Timer: {:?}", timer);
-            timer.tick(time.delta());
-            if timer.finished() {
+            delay.tick(time.delta());
+            if delay.finished() {
                 warn!("Attack {:?} demolished", entity);
                 commands.entity(entity).despawn_recursive();
             }
