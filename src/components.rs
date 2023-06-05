@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
-
 use bevy_rapier2d::prelude::*;
+
+use crate::constants::UNIT_SIZE;
 
 // TODO: components should be moduled in part.
 
@@ -23,7 +24,7 @@ pub struct ColliderBundle {
 impl Default for ColliderBundle {
     fn default() -> Self {
         ColliderBundle {
-            collider: Collider::cuboid(4., 4.),
+            collider: Collider::cuboid(UNIT_SIZE, UNIT_SIZE),
             rigid_body: RigidBody::Dynamic,
             damping: Damping {
                 linear_damping: 0.0,
@@ -51,7 +52,7 @@ impl From<&EntityInstance> for ColliderBundle {
 
         match entity_instance.identifier.as_ref() {
             "Player" => ColliderBundle {
-                collider: Collider::cuboid(4., 4.),
+                collider: Collider::cuboid(UNIT_SIZE, UNIT_SIZE),
                 rigid_body: RigidBody::Dynamic,
                 friction: Friction {
                     coefficient: 0.0,
@@ -61,7 +62,7 @@ impl From<&EntityInstance> for ColliderBundle {
                 ..ColliderBundle::default()
             },
             "NPC" => ColliderBundle {
-                collider: Collider::cuboid(4., 4.),
+                collider: Collider::cuboid(UNIT_SIZE, UNIT_SIZE),
                 rigid_body: RigidBody::Dynamic,
                 friction: Friction {
                     coefficient: 0.0,
@@ -110,7 +111,7 @@ pub struct PlayerBundle {
     entity_instance: EntityInstance,
 }
 
-#[derive(Component, Deref, DerefMut, Default, Clone)]
+#[derive(Component, Deref, DerefMut, Default, Clone, Reflect)]
 pub struct AttackTimer(pub Timer);
 
 #[derive(Component, Default, Clone, Reflect)]
@@ -166,12 +167,12 @@ pub enum AnimationState {
     BeHit,
 }
 
-#[derive(Component, Default, Clone, Reflect)]
+#[derive(Component, Default, Clone, Reflect, Debug)]
 pub struct Facing {
     pub direction: FaceDirection,
 }
 
-#[derive(Component, Default, Clone, PartialEq, Eq, Reflect)]
+#[derive(Component, Default, Clone, PartialEq, Eq, Reflect, Debug)]
 pub enum FaceDirection {
     Up,
     #[default]

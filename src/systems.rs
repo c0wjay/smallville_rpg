@@ -10,6 +10,8 @@ use std::{
 
 use bevy_rapier2d::prelude::*;
 
+use crate::constants::{ASPECT_RATIO, GRID_SIZE};
+
 pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let camera = Camera2dBundle::default();
     commands.spawn(camera);
@@ -38,8 +40,8 @@ pub fn coordinate_setup(
     for (entity, mut coordinate, transform) in &mut query {
         info!("{:?}, {:?}, {:?}", entity, coordinate, transform);
         // Store coordinates of entities in local component.
-        coordinate.x = transform.translation.x.round() as i32;
-        coordinate.y = transform.translation.y.round() as i32;
+        coordinate.x = (transform.translation.x / GRID_SIZE).round() as i32;
+        coordinate.y = (transform.translation.y / GRID_SIZE).round() as i32;
 
         // Store coordinates of entities in global entity map.
         entity_map.insert((coordinate.x, coordinate.y), entity);
@@ -91,15 +93,23 @@ pub fn change_coordinate_of_moved_entity(
     mut query: Query<(&mut Coordinate, &Transform, Entity), Changed<Transform>>,
 ) {
     for (mut coordinate, transform, entity) in &mut query {
+        let (x, y) = (
+            (transform.translation.x / GRID_SIZE).round() as i32,
+            (transform.translation.y / GRID_SIZE).round() as i32,
+        );
+
+        if (coordinate.x, coordinate.y) == (x, y) {
+            continue;
+        }
+
         // Delete old coordinates of entities in global entity map.
         entity_map.delete((coordinate.x, coordinate.y), entity);
 
         // Updating coordinates of entities in local component.
-        coordinate.x = transform.translation.x.round() as i32;
-        coordinate.y = transform.translation.y.round() as i32;
+        (coordinate.x, coordinate.y) = (x, y);
 
         // Updating coordinates of entities in global entity map.
-        entity_map.insert((coordinate.x, coordinate.y), entity);
+        entity_map.insert((x, y), entity);
     }
 }
 
@@ -270,8 +280,6 @@ pub fn spawn_wall_collision(
     }
 }
 
-const ASPECT_RATIO: f32 = 16. / 9.;
-
 #[allow(clippy::type_complexity)]
 pub fn camera_fit_inside_current_level(
     mut camera_query: Query<
@@ -427,13 +435,13 @@ pub fn punching(
     for (mut movelock, facing, mut velocity, mut timer, entity, player) in &mut fighters {
         timer.tick(time.delta());
         if input.pressed(KeyCode::Space) && !movelock.0 {
-            const MOVE_BACKWARD: f32 = 100.;
-            match facing.direction {
-                FaceDirection::Down => velocity.linvel.y = MOVE_BACKWARD,
-                FaceDirection::Left => velocity.linvel.x = MOVE_BACKWARD,
-                FaceDirection::Right => velocity.linvel.x = -MOVE_BACKWARD,
-                FaceDirection::Up => velocity.linvel.y = -MOVE_BACKWARD,
-            }
+            // const MOVE_FRONT: f32 = 100.;
+            // match facing.direction {
+            //     FaceDirection::Down => velocity.linvel.y = -MOVE_FRONT,
+            //     FaceDirection::Left => velocity.linvel.x = -MOVE_FRONT,
+            //     FaceDirection::Right => velocity.linvel.x = MOVE_FRONT,
+            //     FaceDirection::Up => velocity.linvel.y = MOVE_FRONT,
+            // }
 
             info!("{:?} Entity: {:?}", player, entity);
             // Spawn the attack entity
@@ -457,19 +465,56 @@ pub fn punching(
 
         if timer.0.finished() && movelock.0 {
             movelock.0 = false;
-            const MOVE_FRONT: f32 = 300.;
-            match facing.direction {
-                FaceDirection::Down => velocity.linvel.y = -MOVE_FRONT,
-                FaceDirection::Left => velocity.linvel.x = -MOVE_FRONT,
-                FaceDirection::Right => velocity.linvel.x = MOVE_FRONT,
-                FaceDirection::Up => velocity.linvel.y = MOVE_FRONT,
-            }
-            timer.set_duration(Duration::from_secs_f32(0.1));
         }
     }
 }
 
-pub fn attack_system(
+pub fn melee_attack_system(
+    entity_map: Res<EntityMap>,
+    attacks: Query<(&Parent, &Attack)>,
+    attackers: Query<(&Facing, &Coordinate)>,
+    hurtboxes: Query<&Parent, With<Hurtbox>>,
+    mut event_writer: EventWriter<DamageEvent>,
+) {
+    for (attacker, attack) in attacks.iter() {
+        let attacker_entity = attacker.get();
+
+        let (attacker_facing, attacker_coordinate) = attackers
+            .get(attacker_entity)
+            .expect("Attacker entity must have `Facing` and `Coordinate` components");
+
+        let (x, y) = match attacker_facing.direction {
+            FaceDirection::Down => (attacker_coordinate.x, attacker_coordinate.y - 1),
+            FaceDirection::Left => (attacker_coordinate.x - 1, attacker_coordinate.y),
+            FaceDirection::Right => (attacker_coordinate.x + 1, attacker_coordinate.y),
+            FaceDirection::Up => (attacker_coordinate.x, attacker_coordinate.y + 1),
+        };
+
+        if let Some(hit_range) = entity_map.get((x, y)) {
+            for hurtbox_entity in hit_range {
+                if attacker_entity.eq(hurtbox_entity) {
+                    continue;
+                }
+
+                info!("Attacker: {:?}", attacker_entity);
+                info!("Attack: {:?}", attack);
+                info!("Hurtbox: {:?}", hurtbox_entity);
+
+                event_writer.send(DamageEvent {
+                    damageing_entity: attacker_entity,
+                    damage_velocity: attack.pushback,
+                    damage: attack.damage,
+                    damaged_entity: *hurtbox_entity,
+                    hitstun_duration: attack.hitstun_duration,
+                });
+            }
+        }
+    }
+}
+
+// Previous version of melee_attack_system. But using CollisionEvent is better for projectiles.
+// TODO: reuse this code for projectile attacks
+pub fn projectile_attack_system(
     mut commands: Commands,
     mut events: EventReader<CollisionEvent>,
     attacks: Query<(&Parent, Entity, &Attack)>,
@@ -532,7 +577,7 @@ pub fn deactivate_attack(
             // info!("Timer: {:?}", timer);
             timer.tick(time.delta());
             if timer.finished() {
-                warn!("Attack {:?} finished", entity);
+                warn!("Attack {:?} demolished", entity);
                 commands.entity(entity).despawn_recursive();
             }
         }

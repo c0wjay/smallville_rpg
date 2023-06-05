@@ -7,6 +7,7 @@ use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
 use bevy_rapier2d::prelude::*;
 
 mod components;
+mod constants;
 mod map;
 mod systems;
 
@@ -46,6 +47,7 @@ fn main() {
         .register_type::<components::Facing>()
         .register_type::<components::MoveLock>()
         .register_type::<components::Coordinate>()
+        .register_type::<components::AttackTimer>()
         .add_system(systems::set_player)
         .add_system(systems::y_sort)
         .add_plugin(WorldInspectorPlugin::new())
@@ -54,7 +56,7 @@ fn main() {
         .add_system(systems::change_coordinate_of_moved_entity)
         .add_event::<components::DamageEvent>()
         .add_system(systems::punching)
-        .add_system(systems::attack_system)
+        .add_system(systems::melee_attack_system)
         .add_system(systems::collect_hit)
         .add_system(systems::deactivate_attack)
         .run();
