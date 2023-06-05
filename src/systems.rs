@@ -21,6 +21,11 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ldtk_handle: ldtk_handle,
         ..Default::default()
     });
+
+    commands.insert_resource(AnimationTimer(Timer::from_seconds(
+        0.1,
+        TimerMode::Repeating,
+    )));
 }
 
 pub fn coordinate_setup(
@@ -375,17 +380,10 @@ pub fn update_level_selection(
 
 pub fn animate_sprite(
     time: Res<Time>,
-    mut query: Query<
-        (
-            &mut AnimationTimer,
-            &mut TextureAtlasSprite,
-            &Facing,
-            &mut AnimationIndices,
-        ),
-        With<Player>,
-    >,
+    mut timer: ResMut<AnimationTimer>,
+    mut query: Query<(&mut TextureAtlasSprite, &Facing, &mut AnimationIndices), With<Player>>,
 ) {
-    for (mut timer, mut sprite, facing, indices) in &mut query {
+    for (mut sprite, facing, indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
             if indices.animation_state == AnimationState::Idle {

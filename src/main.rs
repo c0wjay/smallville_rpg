@@ -48,7 +48,6 @@ fn main() {
         .register_type::<components::MoveLock>()
         .register_type::<components::Coordinate>()
         .register_type::<components::Delay>()
-        .register_type::<components::AnimationTimer>()
         .add_system(systems::set_player)
         .add_system(systems::y_sort)
         .add_plugin(WorldInspectorPlugin::new())

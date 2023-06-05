@@ -105,10 +105,8 @@ pub struct PlayerBundle {
     pub player: Player,
     #[worldly]
     pub worldly: Worldly,
-    pub facing: Facing,
-    pub animation_indices: AnimationIndices,
+    pub animation_bundle: AnimationBundle,
     pub ysort: YSort,
-    pub timer: AnimationTimer,
     pub delay: Delay,
     pub move_lock: MoveLock,
     pub coordinate: Coordinate,
@@ -128,10 +126,8 @@ pub struct NPCBundle {
     pub npc: NPC,
     #[worldly]
     pub worldly: Worldly,
-    pub facing: Facing,
-    pub animation_indices: AnimationIndices,
+    pub animation_bundle: AnimationBundle,
     pub ysort: YSort,
-    pub timer: AnimationTimer,
     pub delay: Delay,
     pub hurtbox: Hurtbox,
     pub coordinate: Coordinate,
@@ -140,7 +136,12 @@ pub struct NPCBundle {
     entity_instance: EntityInstance,
 }
 
-// TODO: AnimationIndices, Animation State, Facing, AnimationTimer should be bundled as AnimationBundle.
+#[derive(Clone, Default, Bundle)]
+pub struct AnimationBundle {
+    pub animation_indices: AnimationIndices,
+    pub facing: Facing,
+}
+
 #[derive(Component, Default, Clone)]
 pub struct AnimationIndices {
     pub first: usize,
@@ -152,7 +153,6 @@ pub struct AnimationIndices {
 pub enum AnimationState {
     #[default]
     Idle,
-    // TODO: Animation state should be separated with direction. For example, enum AnimationState::Walk & enum AnimationDirection::Left
     Walk,
     Punch,
     BeHit,
@@ -172,8 +172,7 @@ pub enum FaceDirection {
     Right,
 }
 
-// TODO: need to be combined with Delay, and it needs to be component not resource.
-#[derive(Component, Deref, DerefMut, Clone, Reflect)]
+#[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AnimationTimer(pub Timer);
 
 impl Default for AnimationTimer {
