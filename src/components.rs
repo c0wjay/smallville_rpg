@@ -100,6 +100,7 @@ pub struct NPC;
 pub struct PlayerBundle {
     #[sprite_sheet_bundle("char/player_base.png", 16.0, 32.0, 6, 21, 0.0, 0.0, 0)]
     #[bundle]
+    // TODO: move SpriteSheetBundle to child entity, to order body and other sprites.
     pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]
     #[bundle]
@@ -123,6 +124,7 @@ pub struct PlayerBundle {
 pub struct NPCBundle {
     #[sprite_sheet_bundle("Tiny16-ExpandedFemaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
     #[bundle]
+    // TODO: move SpriteSheetBundle to child entity, to order body and other sprites.
     pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]
     #[bundle]
@@ -168,7 +170,7 @@ pub enum AnimationState {
     #[default]
     Idle,
     Walk,
-    Punch,
+    Attack,
     BeHit,
 }
 
@@ -187,7 +189,13 @@ pub enum FaceDirection {
 }
 
 #[derive(Copy, Clone, Debug, Default, Component)]
+pub struct Body;
+
+#[derive(Copy, Clone, Debug, Default, Component)]
 pub struct Arm;
+
+#[derive(Copy, Clone, Debug, Default, Component)]
+pub struct Weapon;
 
 #[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AnimationTimer(pub Timer);

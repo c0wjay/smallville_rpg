@@ -1,6 +1,9 @@
 use crate::components::*;
 use crate::map::*;
-use bevy::{prelude::*, render::view::VisibilityPlugin, utils::tracing::event};
+use bevy::{
+    prelude::*, render::view::visibility, render::view::VisibilityPlugin, sprite::Anchor,
+    utils::tracing::event,
+};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_inspector_egui::egui::text;
 
@@ -86,7 +89,7 @@ pub fn setup_units(
     }
 }
 
-pub fn spawn_children_sprite(
+pub fn spawn_arm_sprite(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
@@ -117,38 +120,79 @@ pub fn spawn_children_sprite(
     }
 }
 
+pub fn spawn_weapon_sprite(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+    mut query: Query<Entity, Added<Player>>,
+) {
+    for entity in &mut query {
+        let texture_handle = asset_server.load("char/tools.png");
+        let texture_atlas = TextureAtlas::from_grid(
+            texture_handle,
+            Vec2::new(16.0, 24.0),
+            6,
+            6,
+            None,
+            Some(Vec2::new(0., 24.)),
+        );
+        let texture_atlas_handle = texture_atlases.add(texture_atlas);
+        let weapon = commands
+            .spawn((
+                SpriteSheetBundle {
+                    texture_atlas: texture_atlas_handle,
+                    sprite: TextureAtlasSprite::new(0),
+                    visibility: Visibility::Hidden,
+                    ..Default::default()
+                },
+                Weapon,
+            ))
+            .id();
+        commands.entity(entity).push_children(&[weapon]);
+    }
+}
+
 pub fn movement(
     input: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Velocity, &mut Facing, &mut AnimationIndices), With<Player>>,
+    mut query: Query<(&mut Velocity, &mut Facing, &mut AnimationIndices, &MoveLock), With<Player>>,
 ) {
-    for (mut velocity, mut facing, mut indices) in &mut query {
-        let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
-        let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
-        let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
-        let down = if input.pressed(KeyCode::S) { 1. } else { 0. };
+    for (mut velocity, mut facing, mut indices, movelock) in &mut query {
+        velocity.linvel.x = 0.;
+        velocity.linvel.y = 0.;
 
-        velocity.linvel.x = (right - left) * 100.;
-        velocity.linvel.y = (up - down) * 100.;
-        if input.pressed(KeyCode::D) {
-            indices.animation_state = AnimationState::Walk;
-            facing.direction = FaceDirection::Right;
-        } else if input.pressed(KeyCode::A) {
-            indices.animation_state = AnimationState::Walk;
-            facing.direction = FaceDirection::Left;
-        } else if input.pressed(KeyCode::W) {
-            indices.animation_state = AnimationState::Walk;
-            facing.direction = FaceDirection::Up;
-        } else if input.pressed(KeyCode::S) {
-            indices.animation_state = AnimationState::Walk;
-            facing.direction = FaceDirection::Down;
-        } else {
-            indices.animation_state = AnimationState::Idle;
+        if !movelock.0 {
+            let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
+            let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
+            let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
+            let down = if input.pressed(KeyCode::S) { 1. } else { 0. };
+
+            velocity.linvel.x = (right - left) * 100.;
+            velocity.linvel.y = (up - down) * 100.;
+
+            if input.pressed(KeyCode::D) {
+                indices.animation_state = AnimationState::Walk;
+                facing.direction = FaceDirection::Right;
+            } else if input.pressed(KeyCode::A) {
+                indices.animation_state = AnimationState::Walk;
+                facing.direction = FaceDirection::Left;
+            } else if input.pressed(KeyCode::W) {
+                indices.animation_state = AnimationState::Walk;
+                facing.direction = FaceDirection::Up;
+            } else if input.pressed(KeyCode::S) {
+                indices.animation_state = AnimationState::Walk;
+                facing.direction = FaceDirection::Down;
+            } else {
+                indices.animation_state = AnimationState::Idle;
+            }
         }
 
         // TODO: Need to be separate systems, with query filter `Changed<AnimationState>`
         if indices.animation_state == AnimationState::Walk {
             indices.first = 0;
             indices.last = 3;
+        } else if indices.animation_state == AnimationState::Attack {
+            indices.first = 0;
+            indices.last = 4;
         }
     }
 }
@@ -532,20 +576,39 @@ pub fn animate_sprite(
                 indices.current + 1
             };
 
-            // Walking animation
             let mut temp_index = indices.current;
+
+            // Walking animation
             if indices.animation_state == AnimationState::Walk {
                 if indices.current == 2 {
                     temp_index = 0;
                 } else if indices.current == 3 {
                     temp_index = 2;
                 }
+
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => temp_index,
+                    FaceDirection::Left | FaceDirection::Right => 6 + temp_index,
+                    FaceDirection::Up => 12 + temp_index,
+                };
             }
-            sprite.index = match facing.direction {
-                FaceDirection::Down => temp_index,
-                FaceDirection::Left | FaceDirection::Right => 6 + temp_index,
-                FaceDirection::Up => 12 + temp_index,
-            };
+
+            // Attack animation
+            if indices.animation_state == AnimationState::Attack {
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => 66 + temp_index,
+                    FaceDirection::Left | FaceDirection::Right => 48 + temp_index,
+                    FaceDirection::Up => {
+                        if temp_index == 3 {
+                            63
+                        } else if temp_index == 4 {
+                            62
+                        } else {
+                            36 + temp_index
+                        }
+                    }
+                };
+            }
         }
     }
 }
@@ -569,19 +632,143 @@ pub fn animate_arm_sprites(
                 break;
             }
 
-            // Walking animation
             let mut temp_index = indices.current;
+
+            // Walking animation
             if indices.animation_state == AnimationState::Walk {
                 if indices.current == 2 {
                     temp_index = 0;
                 } else if indices.current == 3 {
                     temp_index = 2;
                 }
+
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => temp_index,
+                    FaceDirection::Left | FaceDirection::Right => 12 + temp_index,
+                    FaceDirection::Up => 24 + temp_index,
+                };
             }
-            sprite.index = match facing.direction {
-                FaceDirection::Down => temp_index,
-                FaceDirection::Left | FaceDirection::Right => 12 + temp_index,
-                FaceDirection::Up => 24 + temp_index,
+
+            // Attack animation
+            if indices.animation_state == AnimationState::Attack {
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => 132 + temp_index,
+                    FaceDirection::Left | FaceDirection::Right => 96 + temp_index,
+                    FaceDirection::Up => {
+                        if temp_index == 3 {
+                            123
+                        } else if temp_index == 4 {
+                            122
+                        } else {
+                            72 + temp_index
+                        }
+                    }
+                };
+            }
+        }
+    }
+}
+
+// TODO:
+pub fn animate_weapon_sprites(
+    player_query: Query<(&Facing, &AnimationIndices), (With<Player>, Changed<AnimationIndices>)>,
+    mut weapon_query: Query<
+        (
+            &Parent,
+            &mut TextureAtlasSprite,
+            &mut Transform,
+            &mut Visibility,
+        ),
+        With<Weapon>,
+    >,
+) {
+    for (parent, mut sprite, mut transform, mut visibility) in weapon_query.iter_mut() {
+        if let Ok((facing, indices)) = player_query.get(parent.get()) {
+            // Facing
+            sprite.flip_x = facing.direction == FaceDirection::Left;
+
+            // Reset to first frame if idle
+            if indices.animation_state != AnimationState::Attack {
+                *visibility = Visibility::Hidden;
+                break;
+            }
+            *visibility = Visibility::Visible;
+            (
+                transform.rotation.x,
+                transform.rotation.z,
+                transform.rotation.w,
+            ) = (0., 0., 0.);
+
+            match facing.direction {
+                FaceDirection::Down => {
+                    if indices.current < 2 {
+                        sprite.index = 24 + 0;
+                        sprite.anchor = Anchor::BottomCenter;
+                    } else if indices.current < 4 {
+                        sprite.index = 24 + 1;
+                        sprite.anchor = Anchor::Center;
+                    } else {
+                        sprite.index = 24 + 1;
+                        (transform.rotation.x, transform.rotation.w) = (-0.3_f32).sin_cos();
+                        sprite.anchor = Anchor::TopCenter;
+                    }
+                }
+                FaceDirection::Left => {
+                    sprite.index = 24 + 2;
+                    match indices.current {
+                        0 => {
+                            (transform.rotation.z, transform.rotation.w) = (-0.1_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((-0.35, -0.75).into())
+                        }
+                        1 => {
+                            (transform.rotation.z, transform.rotation.w) = (0.1_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0., -0.7).into())
+                        }
+                        2 => {
+                            (transform.rotation.z, transform.rotation.w) = (0.3_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0.2, -0.7).into())
+                        }
+                        3 => {
+                            (transform.rotation.z, transform.rotation.w) = (0.5_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0.2, -0.7).into())
+                        }
+                        4 => {
+                            (transform.rotation.z, transform.rotation.w) = (0.7_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0.2, -0.7).into())
+                        }
+                        _ => transform.rotation.z = 0.,
+                    }
+                }
+                FaceDirection::Right => {
+                    sprite.index = 24 + 2;
+                    match indices.current {
+                        0 => {
+                            (transform.rotation.z, transform.rotation.w) = (0.1_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0.35, -0.75).into())
+                        }
+                        1 => {
+                            (transform.rotation.z, transform.rotation.w) = (-0.1_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((0., -0.7).into())
+                        }
+                        2 => {
+                            (transform.rotation.z, transform.rotation.w) = (-0.3_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((-0.2, -0.7).into())
+                        }
+                        3 => {
+                            (transform.rotation.z, transform.rotation.w) = (-0.5_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((-0.2, -0.7).into())
+                        }
+                        4 => {
+                            (transform.rotation.z, transform.rotation.w) = (-0.7_f32).sin_cos();
+                            sprite.anchor = Anchor::Custom((-0.2, -0.7).into())
+                        }
+                        _ => transform.rotation.z = 0.,
+                    }
+                }
+                FaceDirection::Up => {
+                    sprite.index = if indices.current < 2 { 24 + 3 } else { 24 + 4 };
+                    sprite.anchor = Anchor::BottomCenter;
+                }
             };
         }
     }
@@ -593,10 +780,11 @@ pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
     }
 }
 
-pub fn punching(
+pub fn attack(
     input: Res<Input<KeyCode>>,
     mut commands: Commands,
     mut fighters: Query<(
+        &mut AnimationIndices,
         &mut MoveLock,
         &Facing,
         &mut Velocity,
@@ -606,7 +794,9 @@ pub fn punching(
     )>,
     time: Res<Time>,
 ) {
-    for (mut movelock, facing, mut velocity, mut delay, entity, player) in &mut fighters {
+    for (mut indices, mut movelock, facing, mut velocity, mut delay, entity, player) in
+        &mut fighters
+    {
         delay.tick(time.delta());
         if input.pressed(KeyCode::Space) && !movelock.0 {
             // const MOVE_FRONT: f32 = 100.;
@@ -616,6 +806,8 @@ pub fn punching(
             //     FaceDirection::Right => velocity.linvel.x = MOVE_FRONT,
             //     FaceDirection::Up => velocity.linvel.y = MOVE_FRONT,
             // }
+
+            indices.animation_state = AnimationState::Attack;
 
             info!("{:?} Entity: {:?}", player, entity);
             // Spawn the attack entity
@@ -630,7 +822,7 @@ pub fn punching(
                     hitstun_duration: 1.,
                 })
                 .id();
-            *delay = Delay(Timer::from_seconds(0.5, TimerMode::Once));
+            *delay = Delay(Timer::from_seconds(1., TimerMode::Once));
             commands.entity(entity).push_children(&[attack_entity]);
             info!("Spawned attack entity: {:?}", attack_entity);
 
