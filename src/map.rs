@@ -13,6 +13,7 @@ macro_rules! entitymap {
 #[derive(Debug, Resource, Reflect)]
 pub struct EntityMap {
     pub entity_map: HashMap<(i32, i32), Vec<Entity>>,
+    // TODO: flags maybe not need.
     pub setup_flag: bool,
 }
 

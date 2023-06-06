@@ -2,6 +2,7 @@ use crate::components::*;
 use crate::map::*;
 use bevy::{prelude::*, render::view::VisibilityPlugin, utils::tracing::event};
 use bevy_ecs_ldtk::prelude::*;
+use bevy_inspector_egui::egui::text;
 
 use std::{
     cmp::{max, min},
@@ -30,6 +31,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     )));
 }
 
+// TODO: Maybe it doesn't need.
 pub fn coordinate_setup(
     mut entity_map: ResMut<EntityMap>,
     mut query: Query<(Entity, &UnitSize, &mut Coordinate, &Transform)>,
@@ -70,20 +72,48 @@ pub fn coordinate_setup(
     }
 }
 
-pub fn set_player(
+pub fn setup_units(
     mut query: Query<
         (&mut UnitSize, &mut AnimationIndices, &mut YSort),
-        Or<(With<Player>, With<NPC>)>,
+        Or<(Added<Player>, Added<NPC>)>,
     >,
 ) {
     for (mut unit_size, mut animation_indices, mut ysort) in &mut query {
         // TODO: This is hard-coded for now. unit_size can be differ for each entity.
         unit_size.width = UNIT_SIZE;
         unit_size.height = UNIT_SIZE;
-        animation_indices.first = 1;
-        animation_indices.last = 5;
-        animation_indices.animation_state = AnimationState::Idle;
         ysort.z = 5.0;
+    }
+}
+
+pub fn spawn_children_sprite(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+    mut query: Query<Entity, Added<Player>>,
+) {
+    for entity in &mut query {
+        let texture_handle = asset_server.load("char/player_base.png");
+        let texture_atlas = TextureAtlas::from_grid(
+            texture_handle,
+            Vec2::new(16.0, 32.0),
+            12,
+            21,
+            None,
+            Some(Vec2::new(96., 0.)),
+        );
+        let texture_atlas_handle = texture_atlases.add(texture_atlas);
+        let arm = commands
+            .spawn((
+                SpriteSheetBundle {
+                    texture_atlas: texture_atlas_handle,
+                    sprite: TextureAtlasSprite::new(0),
+                    ..Default::default()
+                },
+                Arm,
+            ))
+            .id();
+        commands.entity(entity).push_children(&[arm]);
     }
 }
 
@@ -111,10 +141,22 @@ pub fn movement(
         } else if input.pressed(KeyCode::S) {
             indices.animation_state = AnimationState::Walk;
             facing.direction = FaceDirection::Down;
+        } else {
+            indices.animation_state = AnimationState::Idle;
+        }
+
+        // TODO: Need to be separate systems, with query filter `Changed<AnimationState>`
+        if indices.animation_state == AnimationState::Walk {
+            indices.first = 0;
+            indices.last = 3;
         }
     }
 }
 
+// TODO: Maybe need to be combined with `coordinate_setup`.
+// Because There might be spawned entity after game startup, but they will not included into entity_map until they move.
+// With a few tests, with ldtk-base spawned entities are successfully included into entity_map without `coordinate_setup`.
+// I didn't test with entities spawned after game startup, but it seems `coordinate_setup` is not needed as [bevy-cheatbook](https://bevy-cheatbook.github.io/programming/change-detection.html#filtering) says that `Changed<T>` includes `Added<T>`.
 pub fn change_coordinate_of_moved_entity(
     mut entity_map: ResMut<EntityMap>,
     mut query: Query<(&mut Coordinate, &UnitSize, &Transform, Entity), Changed<Transform>>,
@@ -466,37 +508,84 @@ pub fn animate_sprite(
     mut timer: ResMut<AnimationTimer>,
     mut query: Query<(&mut TextureAtlasSprite, &Facing, &mut AnimationIndices), With<Player>>,
 ) {
-    for (mut sprite, facing, indices) in &mut query {
+    for (mut sprite, facing, mut indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
+            // Facing
+            sprite.flip_x = facing.direction == FaceDirection::Left;
+
+            // Reset to first frame if idle
             if indices.animation_state == AnimationState::Idle {
-                match facing.direction {
-                    FaceDirection::Down => sprite.index = 0,
-                    FaceDirection::Left => sprite.index = 6,
-                    FaceDirection::Right => sprite.index = 12,
-                    FaceDirection::Up => sprite.index = 18,
-                }
-                return;
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => 0,
+                    FaceDirection::Left | FaceDirection::Right => 6,
+                    FaceDirection::Up => 12,
+                };
+                indices.current = 0;
+                break;
             }
 
-            let mut temp_index = sprite.index % 6;
-            temp_index = if temp_index == indices.last {
+            // Move to next frame
+            indices.current = if indices.current == indices.last {
                 indices.first
             } else {
-                temp_index + 1
+                indices.current + 1
             };
 
+            // Walking animation
+            let mut temp_index = indices.current;
+            if indices.animation_state == AnimationState::Walk {
+                if indices.current == 2 {
+                    temp_index = 0;
+                } else if indices.current == 3 {
+                    temp_index = 2;
+                }
+            }
             sprite.index = match facing.direction {
                 FaceDirection::Down => temp_index,
-                FaceDirection::Left => 6 + temp_index,
-                FaceDirection::Right => 12 + temp_index,
-                FaceDirection::Up => 18 + temp_index,
+                FaceDirection::Left | FaceDirection::Right => 6 + temp_index,
+                FaceDirection::Up => 12 + temp_index,
             };
         }
     }
 }
 
-pub fn animate_sprite_children() {}
+pub fn animate_arm_sprites(
+    player_query: Query<(&Facing, &AnimationIndices), (With<Player>, Changed<AnimationIndices>)>,
+    mut arm_query: Query<(&Parent, &mut TextureAtlasSprite), With<Arm>>,
+) {
+    for (parent, mut sprite) in arm_query.iter_mut() {
+        if let Ok((facing, indices)) = player_query.get(parent.get()) {
+            // Facing
+            sprite.flip_x = facing.direction == FaceDirection::Left;
+
+            // Reset to first frame if idle
+            if indices.animation_state == AnimationState::Idle {
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => 0,
+                    FaceDirection::Left | FaceDirection::Right => 12,
+                    FaceDirection::Up => 24,
+                };
+                break;
+            }
+
+            // Walking animation
+            let mut temp_index = indices.current;
+            if indices.animation_state == AnimationState::Walk {
+                if indices.current == 2 {
+                    temp_index = 0;
+                } else if indices.current == 3 {
+                    temp_index = 2;
+                }
+            }
+            sprite.index = match facing.direction {
+                FaceDirection::Down => temp_index,
+                FaceDirection::Left | FaceDirection::Right => 12 + temp_index,
+                FaceDirection::Up => 24 + temp_index,
+            };
+        }
+    }
+}
 
 pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
     for (mut tf, ysort) in q.iter_mut() {

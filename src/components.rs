@@ -98,7 +98,7 @@ pub struct NPC;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
-    #[sprite_sheet_bundle("char/player_base.png", 16.0, 32.0, 18, 21, 0.0, 0.0, 0)]
+    #[sprite_sheet_bundle("char/player_base.png", 16.0, 32.0, 6, 21, 0.0, 0.0, 0)]
     #[bundle]
     pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]
@@ -159,6 +159,7 @@ pub struct AnimationBundle {
 pub struct AnimationIndices {
     pub first: usize,
     pub last: usize,
+    pub current: usize,
     pub animation_state: AnimationState,
 }
 
@@ -184,6 +185,9 @@ pub enum FaceDirection {
     Left,
     Right,
 }
+
+#[derive(Copy, Clone, Debug, Default, Component)]
+pub struct Arm;
 
 #[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AnimationTimer(pub Timer);
