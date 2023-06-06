@@ -26,7 +26,9 @@ impl EntityMap {
 
     pub fn insert(&mut self, coordinate: (i32, i32), entity: Entity) {
         if let Some(entity_vec) = self.entity_map.get_mut(&coordinate) {
-            entity_vec.push(entity);
+            if !entity_vec.contains(&entity) {
+                entity_vec.push(entity);
+            }
         } else {
             self.entity_map.insert(coordinate, vec![entity]);
         }

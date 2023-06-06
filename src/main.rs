@@ -52,7 +52,7 @@ fn main() {
         .add_system(systems::y_sort)
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<map::EntityMap>::new())
-        .add_system(systems::coordinate_setup)
+        .add_system(systems::coordinate_setup.after(systems::set_player))
         .add_system(systems::change_coordinate_of_moved_entity)
         .add_event::<components::DamageEvent>()
         .add_system(systems::punching)

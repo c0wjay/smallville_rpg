@@ -4,13 +4,15 @@ use bevy::{prelude::*, render::view::VisibilityPlugin, utils::tracing::event};
 use bevy_ecs_ldtk::prelude::*;
 
 use std::{
+    cmp::{max, min},
     collections::{HashMap, HashSet},
+    ops::RangeInclusive,
     time::Duration,
 };
 
 use bevy_rapier2d::prelude::*;
 
-use crate::constants::{ASPECT_RATIO, GRID_SIZE};
+use crate::constants::{ASPECT_RATIO, GRID_SIZE, UNIT_SIZE};
 
 pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let camera = Camera2dBundle::default();
@@ -30,29 +32,54 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 pub fn coordinate_setup(
     mut entity_map: ResMut<EntityMap>,
-    mut query: Query<(Entity, &mut Coordinate, &Transform)>,
+    mut query: Query<(Entity, &UnitSize, &mut Coordinate, &Transform)>,
 ) {
     if entity_map.setup_flag {
         return;
     }
     info!("Coordinate Setup");
 
-    for (entity, mut coordinate, transform) in &mut query {
+    for (entity, unit_size, mut coordinate, transform) in &mut query {
         info!("{:?}, {:?}, {:?}", entity, coordinate, transform);
+        info!("{:?}", unit_size.width);
         // Store coordinates of entities in local component.
-        coordinate.x = (transform.translation.x / GRID_SIZE).round() as i32;
-        coordinate.y = (transform.translation.y / GRID_SIZE).round() as i32;
+        // TODO: check that transform.translation is always positive. if true, then we can use `as u32` instead of `round() as i32`.
+
+        let min_x = (transform.translation.x / GRID_SIZE).ceil() as i32;
+        let max_x = ((transform.translation.x + 2. * unit_size.width) / GRID_SIZE).ceil() as i32;
+
+        let min_y = (transform.translation.y / GRID_SIZE).ceil() as i32;
+        let max_y = ((transform.translation.y + 2. * unit_size.height) / GRID_SIZE).ceil() as i32;
+
+        warn!("{:?}, {:?}, {:?}, {:?}", min_x, max_x, min_y, max_y);
+
+        coordinate.min_x = min_x;
+        coordinate.max_x = max_x;
+
+        coordinate.min_y = min_y;
+        coordinate.max_y = max_y;
 
         // Store coordinates of entities in global entity map.
-        entity_map.insert((coordinate.x, coordinate.y), entity);
+        for x in min_x..=max_x {
+            for y in min_y..=max_y {
+                entity_map.insert((x, y), entity);
+            }
+        }
+
         entity_map.setup_flag = true;
     }
 }
 
 pub fn set_player(
-    mut query: Query<(&mut AnimationIndices, &mut YSort), Or<(With<Player>, With<NPC>)>>,
+    mut query: Query<
+        (&mut UnitSize, &mut AnimationIndices, &mut YSort),
+        Or<(With<Player>, With<NPC>)>,
+    >,
 ) {
-    for (mut animation_indices, mut ysort) in &mut query {
+    for (mut unit_size, mut animation_indices, mut ysort) in &mut query {
+        // TODO: This is hard-coded for now. unit_size can be differ for each entity.
+        unit_size.width = UNIT_SIZE;
+        unit_size.height = UNIT_SIZE;
         animation_indices.first = 1;
         animation_indices.last = 5;
         animation_indices.animation_state = AnimationState::Idle;
@@ -90,26 +117,82 @@ pub fn movement(
 
 pub fn change_coordinate_of_moved_entity(
     mut entity_map: ResMut<EntityMap>,
-    mut query: Query<(&mut Coordinate, &Transform, Entity), Changed<Transform>>,
+    mut query: Query<(&mut Coordinate, &UnitSize, &Transform, Entity), Changed<Transform>>,
 ) {
-    for (mut coordinate, transform, entity) in &mut query {
-        let (x, y) = (
-            (transform.translation.x / GRID_SIZE).round() as i32,
-            (transform.translation.y / GRID_SIZE).round() as i32,
+    for (mut coordinate, unit_size, transform, entity) in &mut query {
+        let (min_x, min_y) = (
+            (transform.translation.x / GRID_SIZE).ceil() as i32,
+            (transform.translation.y / GRID_SIZE).ceil() as i32,
         );
 
-        if (coordinate.x, coordinate.y) == (x, y) {
+        if (coordinate.min_x, coordinate.min_y) == (min_x, min_y) {
             continue;
         }
 
-        // Delete old coordinates of entities in global entity map.
-        entity_map.delete((coordinate.x, coordinate.y), entity);
+        let (max_x, max_y) = (
+            ((transform.translation.x + 2. * unit_size.height) / GRID_SIZE).ceil() as i32,
+            ((transform.translation.y + 2. * unit_size.height) / GRID_SIZE).ceil() as i32,
+        );
+
+        // TODO: Need to be refactored
+        let old_min_x = coordinate.min_x;
+        let old_min_y = coordinate.min_y;
+        let old_max_x = coordinate.max_x;
+        let old_max_y = coordinate.max_y;
+
+        // Update columns of changed coordinates in entity map.
+        if min_x < old_min_x {
+            for x in min_x..min(max_x + 1, old_min_x) {
+                for y in min_y..=max_y {
+                    entity_map.insert((x, y), entity);
+                }
+            }
+            for x in max(max_x + 1, old_min_x)..=old_max_x {
+                for y in old_min_y..=old_max_y {
+                    entity_map.delete((x, y), entity);
+                }
+            }
+        } else if min_x > old_min_x {
+            for x in old_min_x..min(min_x, old_max_x + 1) {
+                for y in old_min_y..=old_max_y {
+                    entity_map.delete((x, y), entity);
+                }
+            }
+            for x in max(old_max_x + 1, min_x)..=max_x {
+                for y in min_y..=max_y {
+                    entity_map.insert((x, y), entity);
+                }
+            }
+        }
+
+        // Update rows of changed coordinates in entity map.
+        if min_y < old_min_y {
+            for y in min_y..min(max_y + 1, old_min_y) {
+                for x in min_x..=max_x {
+                    entity_map.insert((x, y), entity);
+                }
+            }
+            for y in max(max_y + 1, old_min_y)..=old_max_y {
+                for x in old_min_x..=old_max_x {
+                    entity_map.delete((x, y), entity);
+                }
+            }
+        } else if min_y > old_min_y {
+            for y in old_min_y..min(min_y, old_max_y + 1) {
+                for x in old_min_x..=old_max_x {
+                    entity_map.delete((x, y), entity);
+                }
+            }
+            for y in max(old_max_y + 1, min_y)..=max_y {
+                for x in min_x..=max_x {
+                    entity_map.insert((x, y), entity);
+                }
+            }
+        }
 
         // Updating coordinates of entities in local component.
-        (coordinate.x, coordinate.y) = (x, y);
-
-        // Updating coordinates of entities in global entity map.
-        entity_map.insert((x, y), entity);
+        (coordinate.min_x, coordinate.min_y) = (min_x, min_y);
+        (coordinate.max_x, coordinate.max_y) = (max_x, max_y);
     }
 }
 
@@ -413,6 +496,8 @@ pub fn animate_sprite(
     }
 }
 
+pub fn animate_sprite_children() {}
+
 pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
     for (mut tf, ysort) in q.iter_mut() {
         tf.translation.z = ysort.z - (1.0f32 / (1.0f32 + (2.0f32.powf(-0.01 * tf.translation.y))));
@@ -483,31 +568,55 @@ pub fn melee_attack_system(
             .get(attacker_entity)
             .expect("Attacker entity must have `Facing` and `Coordinate` components");
 
-        let (x, y) = match attacker_facing.direction {
-            FaceDirection::Down => (attacker_coordinate.x, attacker_coordinate.y - 1),
-            FaceDirection::Left => (attacker_coordinate.x - 1, attacker_coordinate.y),
-            FaceDirection::Right => (attacker_coordinate.x + 1, attacker_coordinate.y),
-            FaceDirection::Up => (attacker_coordinate.x, attacker_coordinate.y + 1),
+        // TODO: change x, y to range type.
+        let (range_x, range_y) = match attacker_facing.direction {
+            FaceDirection::Down => (
+                (attacker_coordinate.min_x..=attacker_coordinate.max_x),
+                (attacker_coordinate.min_y - 1..=attacker_coordinate.min_y - 1), // Maybe have to range in min_y-1..=min_y, because of very small & adjoined objects
+            ),
+            FaceDirection::Left => (
+                (attacker_coordinate.min_x - 1..=attacker_coordinate.min_x - 1),
+                (attacker_coordinate.min_y..=attacker_coordinate.max_y),
+            ),
+            FaceDirection::Right => (
+                (attacker_coordinate.max_x + 1..=attacker_coordinate.max_x + 1),
+                (attacker_coordinate.min_y..=attacker_coordinate.max_y),
+            ),
+            FaceDirection::Up => (
+                (attacker_coordinate.min_x..=attacker_coordinate.max_x),
+                (attacker_coordinate.max_y + 1..=attacker_coordinate.max_y + 1),
+            ),
         };
 
-        if let Some(hit_range) = entity_map.get((x, y)) {
-            for hurtbox_entity in hit_range {
-                if attacker_entity.eq(hurtbox_entity) {
-                    continue;
+        let mut hurtbox_vec = Vec::new();
+        for x in range_x {
+            for y in range_y.clone() {
+                if let Some(hit_range) = entity_map.get((x, y)) {
+                    for hurtbox_entity in hit_range {
+                        if attacker_entity.eq(hurtbox_entity)
+                            | hurtbox_vec.contains(&hurtbox_entity)
+                        {
+                            continue;
+                        }
+                        hurtbox_vec.push(hurtbox_entity);
+                    }
                 }
-
-                info!("Attacker: {:?}", attacker_entity);
-                info!("Attack: {:?}", attack);
-                info!("Hurtbox: {:?}", hurtbox_entity);
-
-                event_writer.send(DamageEvent {
-                    damageing_entity: attacker_entity,
-                    damage_velocity: attack.pushback,
-                    damage: attack.damage,
-                    damaged_entity: *hurtbox_entity,
-                    hitstun_duration: attack.hitstun_duration,
-                });
             }
+        }
+
+        info!("Attacker: {:?}", attacker_entity);
+        info!("Attack: {:?}", attack);
+
+        for hurtbox_entity in hurtbox_vec {
+            info!("Hurtbox: {:?}", hurtbox_entity);
+
+            event_writer.send(DamageEvent {
+                damageing_entity: attacker_entity,
+                damage_velocity: attack.pushback,
+                damage: attack.damage,
+                damaged_entity: *hurtbox_entity,
+                hitstun_duration: attack.hitstun_duration,
+            });
         }
     }
 }
@@ -552,7 +661,7 @@ pub fn projectile_attack_system(
 }
 
 pub fn collect_hit(
-    mut npc: Query<&mut Visibility, With<NPC>>,
+    mut npc: Query<&mut Visibility, Or<(With<NPC>, With<Player>)>>,
     mut damage_events: EventReader<DamageEvent>,
 ) {
     for event in damage_events.iter() {

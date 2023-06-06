@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -96,7 +98,7 @@ pub struct NPC;
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct PlayerBundle {
-    #[sprite_sheet_bundle("Tiny16-ExpandedMaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
+    #[sprite_sheet_bundle("char/player_base.png", 16.0, 32.0, 18, 21, 0.0, 0.0, 0)]
     #[bundle]
     pub sprite_sheet_bundle: SpriteSheetBundle,
     #[from_entity_instance]
@@ -105,6 +107,8 @@ pub struct PlayerBundle {
     pub player: Player,
     #[worldly]
     pub worldly: Worldly,
+    pub unit_size: UnitSize,
+    #[bundle]
     pub animation_bundle: AnimationBundle,
     pub ysort: YSort,
     pub delay: Delay,
@@ -126,6 +130,8 @@ pub struct NPCBundle {
     pub npc: NPC,
     #[worldly]
     pub worldly: Worldly,
+    pub unit_size: UnitSize,
+    #[bundle]
     pub animation_bundle: AnimationBundle,
     pub ysort: YSort,
     pub delay: Delay,
@@ -134,6 +140,13 @@ pub struct NPCBundle {
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
+}
+
+#[derive(Clone, Default, Component)]
+pub struct UnitSize {
+    // width and height is half of the actual size.
+    pub width: f32,
+    pub height: f32,
 }
 
 #[derive(Clone, Default, Bundle)]
@@ -194,10 +207,12 @@ impl Default for Delay {
 
 pub struct MoveLock(pub bool);
 
-#[derive(Copy, Clone, Debug, Default, Component, Reflect)]
+#[derive(Clone, Default, Debug, Component, Reflect)]
 pub struct Coordinate {
-    pub x: i32,
-    pub y: i32,
+    pub min_x: i32,
+    pub min_y: i32,
+    pub max_x: i32,
+    pub max_y: i32,
 }
 
 #[derive(Component, Default, Clone, Debug)]
