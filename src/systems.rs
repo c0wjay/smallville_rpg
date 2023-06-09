@@ -34,7 +34,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     )));
 }
 
-// TODO: Maybe it doesn't need.
+// TODO(DEAD CODE): Maybe it doesn't need.
 pub fn coordinate_setup(
     mut entity_map: ResMut<EntityMap>,
     mut query: Query<(Entity, &UnitSize, &mut Coordinate, &Transform)>,
@@ -42,11 +42,8 @@ pub fn coordinate_setup(
     if entity_map.setup_flag {
         return;
     }
-    info!("Coordinate Setup");
 
     for (entity, unit_size, mut coordinate, transform) in &mut query {
-        info!("{:?}, {:?}, {:?}", entity, coordinate, transform);
-        info!("{:?}", unit_size.width);
         // Store coordinates of entities in local component.
         // TODO: check that transform.translation is always positive. if true, then we can use `as u32` instead of `round() as i32`.
 
@@ -55,8 +52,6 @@ pub fn coordinate_setup(
 
         let min_y = (transform.translation.y / GRID_SIZE).ceil() as i32;
         let max_y = ((transform.translation.y + 2. * unit_size.height) / GRID_SIZE).ceil() as i32;
-
-        warn!("{:?}, {:?}, {:?}, {:?}", min_x, max_x, min_y, max_y);
 
         coordinate.min_x = min_x;
         coordinate.max_x = max_x;
@@ -156,11 +151,12 @@ pub fn movement(
     input: Res<Input<KeyCode>>,
     mut query: Query<(&mut Velocity, &mut Facing, &mut AnimationIndices, &MoveLock), With<Player>>,
 ) {
-    for (mut velocity, mut facing, mut indices, movelock) in &mut query {
+    for (mut velocity, mut facing, mut indices, move_lock) in &mut query {
         velocity.linvel.x = 0.;
         velocity.linvel.y = 0.;
-
-        if !movelock.0 {
+        info!("movement{:?}", move_lock.0);
+        if !move_lock.0 {
+            info!("{:?}", move_lock.0);
             let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
             let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
             let up = if input.pressed(KeyCode::W) { 1. } else { 0. };
@@ -669,7 +665,6 @@ pub fn animate_arm_sprites(
     }
 }
 
-// TODO:
 pub fn animate_weapon_sprites(
     player_query: Query<(&Facing, &AnimationIndices), (With<Player>, Changed<AnimationIndices>)>,
     mut weapon_query: Query<
@@ -783,22 +778,22 @@ pub fn y_sort(mut q: Query<(&mut Transform, &YSort)>) {
 pub fn attack(
     input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    mut fighters: Query<(
-        &mut AnimationIndices,
-        &mut MoveLock,
-        &Facing,
-        &mut Velocity,
-        &mut Delay,
-        Entity,
-        &Player,
-    )>,
+    mut fighters: Query<
+        (
+            &mut AnimationIndices,
+            &mut MoveLock,
+            &Facing,
+            &mut Velocity,
+            &mut Delay,
+            Entity,
+        ),
+        With<Player>,
+    >,
     time: Res<Time>,
 ) {
-    for (mut indices, mut movelock, facing, mut velocity, mut delay, entity, player) in
-        &mut fighters
-    {
+    for (mut indices, mut move_lock, facing, mut velocity, mut delay, entity) in &mut fighters {
         delay.tick(time.delta());
-        if input.pressed(KeyCode::Space) && !movelock.0 {
+        if input.pressed(KeyCode::Space) && !move_lock.0 {
             // const MOVE_FRONT: f32 = 100.;
             // match facing.direction {
             //     FaceDirection::Down => velocity.linvel.y = -MOVE_FRONT,
@@ -809,7 +804,6 @@ pub fn attack(
 
             indices.animation_state = AnimationState::Attack;
 
-            info!("{:?} Entity: {:?}", player, entity);
             // Spawn the attack entity
             let attack_entity = commands
                 .spawn(CollisionGroups::new(
@@ -826,11 +820,7 @@ pub fn attack(
             commands.entity(entity).push_children(&[attack_entity]);
             info!("Spawned attack entity: {:?}", attack_entity);
 
-            movelock.0 = true;
-        }
-
-        if delay.0.finished() && movelock.0 {
-            movelock.0 = false;
+            move_lock.0 = true;
         }
     }
 }
@@ -845,11 +835,12 @@ pub fn melee_attack_system(
     for (attacker, attack) in attacks.iter() {
         let attacker_entity = attacker.get();
 
+        // TODO: under code should be separate systems. Maybe `fn find_entities_in_range`, and add entities in player range into player entitiy's children entities.
+        // This always check player's range at each frame and update children entities. This system can enable to emphasize entities nearby.
         let (attacker_facing, attacker_coordinate) = attackers
             .get(attacker_entity)
             .expect("Attacker entity must have `Facing` and `Coordinate` components");
 
-        // TODO: change x, y to range type.
         let (range_x, range_y) = match attacker_facing.direction {
             FaceDirection::Down => (
                 (attacker_coordinate.min_x..=attacker_coordinate.max_x),

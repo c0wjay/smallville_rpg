@@ -1,5 +1,3 @@
-use std::ops::RangeInclusive;
-
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -122,7 +120,7 @@ pub struct PlayerBundle {
 
 #[derive(Clone, Default, Bundle, LdtkEntity)]
 pub struct NPCBundle {
-    #[sprite_sheet_bundle("Tiny16-ExpandedFemaleSprites.png", 16.0, 16.0, 6, 4, 0.0, 0.0, 0)]
+    #[sprite_sheet_bundle("char/npc_1.png", 16.0, 32.0, 4, 4, 0.0, 0.0, 0)]
     #[bundle]
     // TODO: move SpriteSheetBundle to child entity, to order body and other sprites.
     pub sprite_sheet_bundle: SpriteSheetBundle,
@@ -215,7 +213,7 @@ impl Default for Delay {
     }
 }
 
-#[derive(Component, Default, Clone, Reflect)]
+#[derive(Component, Default, Clone, Reflect, Debug)]
 
 pub struct MoveLock(pub bool);
 

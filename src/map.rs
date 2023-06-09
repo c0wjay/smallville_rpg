@@ -11,6 +11,7 @@ macro_rules! entitymap {
 
 // Mirrored map that stores the coordinates of entities containing [`Coordinate`].
 #[derive(Debug, Resource, Reflect)]
+// TODO: name `EntityMap` is overlapped with bevy_ecs's `EntityMap`. so rename it.
 pub struct EntityMap {
     pub entity_map: HashMap<(i32, i32), Vec<Entity>>,
     // TODO: flags maybe not need.

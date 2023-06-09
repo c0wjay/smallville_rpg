@@ -1,15 +1,27 @@
 // This example shows off a more in-depth implementation of a game with `bevy_ecs_ldtk`.
 // Please run with `--release`.
 
-use bevy::prelude::*;
+use bevy::{
+    a11y::{
+        accesskit::{NodeBuilder, Role},
+        AccessibilityNode,
+    },
+    input::mouse::{MouseScrollUnit, MouseWheel},
+    log::LogPlugin,
+    prelude::*,
+};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
 use bevy_rapier2d::prelude::*;
+use state::{move_lock_system, move_unlock_system};
+use ui::ConsoleAnimation;
 
 mod components;
 mod constants;
 mod map;
+mod state;
 mod systems;
+mod ui;
 
 // TODO: need to be moduled by plugins.
 fn main() {
@@ -63,5 +75,10 @@ fn main() {
         .add_system(systems::melee_attack_system)
         .add_system(systems::collect_hit)
         .add_system(systems::deactivate_attack)
+        // use `AppState` to define current game status, and we can use this when we want to run system logic only once on game loading. ex: `add_system(ui::build_ui.in_schedule(OnEnter(state::AppState::MainGame)))`
+        .add_state::<state::AppState>()
+        .add_plugin(ui::ConsolePlugin)
+        .add_system(move_lock_system.in_schedule(OnExit(state::AppState::MainGame)))
+        .add_system(move_unlock_system.in_set(OnUpdate(state::AppState::MainGame)))
         .run();
 }
