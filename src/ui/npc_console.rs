@@ -14,7 +14,7 @@ use rand::Rng;
 use sysinfo::{ProcessorExt, System, SystemExt, UserExt};
 
 use crate::{
-    components::{Coordinate, FaceDirection, Facing, MoveLock, Player, NPC},
+    components::{Coordinate, CurrentInteractingNPC, FaceDirection, Facing, MoveLock, Player, NPC},
     map::EntityMap,
     state::AppState,
 };
@@ -28,22 +28,39 @@ pub struct CommandLineText;
 #[derive(Component)]
 pub struct ConsoleUI;
 
-#[derive(Default, Resource)]
+// TODO: `ConsoleData`, `PrintConsoleEvent`, `EnteredConsoleCommandEvent` should contains info about NPC (which interacts with player), to separate response by each NPCs.
+// Maybe `ConsoleData` will be child of NPC entity, not direct Component of it.
+// `ConsoleData` should be a component that NPC entities take. `PrintConsoleEvent` and `EnteredConsoleCommandEvent` should have field that describes which NPC entities emit them.
+#[derive(Default, Component, Debug, Reflect)]
 pub struct ConsoleData {
-    pub enter_command: String,
+    pub typed_command: String,
     pub is_opening: bool,
     pub fully_opened: bool,
     pub messages: Vec<String>,
 }
-pub struct PrintConsoleEvent(pub String);
-pub struct EnteredConsoleCommandEvent(pub String);
+pub struct PrintConsoleEvent {
+    pub npc: Entity,
+    pub message: String,
+}
+pub struct EnteredConsoleCommandEvent {
+    pub npc: Entity,
+    pub message: String,
+}
 
-pub fn add_message_events_to_console(
-    mut data: ResMut<ConsoleData>,
+// pushes messages in event `PrintConsoleEvent` to `ConsoleData.messages`.
+pub fn push_message_events_to_console(
+    mut npc_query: Query<Entity, With<NPC>>,
+    mut data_query: Query<(&Parent, &mut ConsoleData)>,
     mut ev_console_message: EventReader<PrintConsoleEvent>,
 ) {
-    for PrintConsoleEvent(message) in ev_console_message.iter() {
-        data.messages.push(message.clone());
+    for PrintConsoleEvent { npc, message } in ev_console_message.iter() {
+        for (parent, mut data) in data_query.iter_mut() {
+            if let Ok(parent_npc) = npc_query.get(parent.get()) {
+                if parent_npc.eq(npc) {
+                    data.messages.push(message.clone());
+                }
+            }
+        }
     }
 }
 
@@ -61,12 +78,27 @@ pub struct ScrollingList {
     position: f32,
 }
 
-// TODO: Add Scroll. Resize height of command box.
+pub fn spawn_console_data_in_npc(
+    mut commands: Commands,
+    mut npc_query: Query<Entity, Added<NPC>>,
+    mut console_writer: EventWriter<PrintConsoleEvent>,
+) {
+    for npc in npc_query.iter_mut() {
+        let child = commands.spawn(ConsoleData::default()).id();
+        commands.entity(npc).push_children(&[child]);
+
+        // TODO: This would be modified. motd should contains about NPC info.
+        console_writer.send(PrintConsoleEvent {
+            npc,
+            message: print_motd(&mut System::new(), true),
+        });
+    }
+}
+
 pub fn build_ui(
     mut commands: Commands,
     mut anim_data: ResMut<ConsoleAnimation>,
     window: Query<&Window, With<PrimaryWindow>>,
-    mut console_writer: EventWriter<PrintConsoleEvent>,
 ) {
     let Ok(current_window) = window.get_single() else {
         return;
@@ -209,11 +241,9 @@ pub fn build_ui(
                         });
                 });
         });
-    let mut sys = System::new();
-    sys.refresh_all();
-    console_writer.send(PrintConsoleEvent(print_motd(&mut sys, false)));
 }
 
+// TODO: add npc argument, and push npc info into motd.
 fn print_motd(sys: &mut System, should_refresh: bool) -> String {
     if should_refresh {
         sys.refresh_cpu();
@@ -278,16 +308,18 @@ fn display_bar(width: usize, value: f64, total_value: f64) -> String {
     res
 }
 
+// TODO: Make a link with this system and open_npc_console, that game should know which npc this console is interact with.
+// Maybe CurrentInteractingNPC component will be need in PlayerBundle?
 pub fn interact_with_npc(
     entity_map: Res<EntityMap>,
-    player: Query<(&Facing, &Coordinate), With<Player>>,
+    mut player: Query<(&mut CurrentInteractingNPC, &Facing, &Coordinate), With<Player>>,
     npc: Query<Entity, With<NPC>>,
     input: Res<Input<KeyCode>>,
     app_state: Res<State<AppState>>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     // TODO: under code should be separate systems. Maybe `fn find_entities_in_range`, and add entities in player range into player entitiy's children entities.
-    for (facing, coordinate) in player.iter() {
+    for (mut interacting_npc, facing, coordinate) in player.iter_mut() {
         let (range_x, range_y) = match facing.direction {
             FaceDirection::Down => (
                 (coordinate.min_x..=coordinate.max_x),
@@ -307,30 +339,24 @@ pub fn interact_with_npc(
             ),
         };
 
-        let mut flag = false;
+        // TODO: need to be refactored.
         for x in range_x {
-            if flag {
-                break;
-            }
             for y in range_y.clone() {
-                if flag {
-                    break;
-                }
                 if let Some(hit_range) = entity_map.get((x, y)) {
                     for npc_entity in hit_range {
                         if npc.contains(*npc_entity) {
-                            flag = true;
+                            if input.just_pressed(KeyCode::E) && app_state.0 == AppState::MainGame {
+                                next_state.set(AppState::ConsoleOpenedState);
+                                interacting_npc.0 = Some(*npc_entity);
+
+                                #[cfg(debug_assertions)]
+                                info!("Console opened {:?}", app_state);
+                            }
                             break;
                         }
                     }
                 }
             }
-        }
-
-        if flag && input.just_pressed(KeyCode::E) && app_state.0 == AppState::MainGame {
-            next_state.set(AppState::ConsoleOpenedState);
-            #[cfg(debug_assertions)]
-            info!("Console opened {:?}", app_state);
         }
     }
 
@@ -341,9 +367,10 @@ pub fn interact_with_npc(
     }
 }
 
-pub fn open_console(
+pub fn open_npc_console(
+    mut interacting_npc_query: Query<&mut CurrentInteractingNPC, With<Player>>,
     mut anim_data: ResMut<ConsoleAnimation>,
-    mut data: ResMut<ConsoleData>,
+    mut data_query: Query<(&Parent, &mut ConsoleData)>,
     time: Res<Time>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -351,17 +378,28 @@ pub fn open_console(
     let Ok(current_window) = window.get_single() else {
         return;
     };
+    for (parent, mut data) in data_query.iter_mut() {
+        // TODO: Maybe checking parent entity of ConsoleData is not necessary.
+        if interacting_npc_query
+            .get_single()
+            .is_ok_and(|x| x.0.is_some_and(|y| y.eq(parent)))
+        {
+            data.is_opening = true;
 
-    data.is_opening = true;
-
-    anim_data.start_position = Vec2::new(0.0, current_window.height());
-    anim_data.end_position = Vec2::new(0.0, (1. - CONSOLE_HEIGHT) * current_window.height());
-    anim_data.start_time = time.elapsed_seconds_f64();
+            anim_data.start_position = Vec2::new(0.0, current_window.height());
+            anim_data.end_position =
+                Vec2::new(0.0, (1. - CONSOLE_HEIGHT) * current_window.height());
+            anim_data.start_time = time.elapsed_seconds_f64();
+            break;
+        }
+    }
 }
 
-pub fn close_console(
+pub fn close_npc_console(
     mut anim_data: ResMut<ConsoleAnimation>,
-    mut data: ResMut<ConsoleData>,
+    mut interacting_npc_query: Query<&mut CurrentInteractingNPC, With<Player>>,
+    npc_query: Query<&Children, With<NPC>>,
+    mut data_query: Query<&mut ConsoleData>,
     time: Res<Time>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -370,18 +408,33 @@ pub fn close_console(
         return;
     };
 
-    data.fully_opened = false;
-    data.is_opening = false;
+    let Ok(mut interacting_npc) = interacting_npc_query.get_single_mut() else {
+        return;
+    };
 
-    anim_data.end_position = Vec2::new(0.0, current_window.height());
-    anim_data.start_position = Vec2::new(0.0, (1. - CONSOLE_HEIGHT) * current_window.height());
-    anim_data.start_time = time.elapsed_seconds_f64();
+    if let Some(mut interacting_npc_entity) = interacting_npc.0 {
+        if let Ok(npc_children) = npc_query.get(interacting_npc_entity) {
+            for child in npc_children.iter() {
+                if let Ok(mut child_data) = data_query.get_mut(*child) {
+                    child_data.fully_opened = false;
+                    child_data.is_opening = false;
+
+                    anim_data.end_position = Vec2::new(0.0, current_window.height());
+                    anim_data.start_position =
+                        Vec2::new(0.0, (1. - CONSOLE_HEIGHT) * current_window.height());
+                    anim_data.start_time = time.elapsed_seconds_f64();
+                    interacting_npc.0 = None;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 pub fn apply_animation(
     mut console_query: Query<(&ConsoleUI, &mut Style)>,
     anim_data: Res<ConsoleAnimation>,
-    mut data: ResMut<ConsoleData>,
+    mut data_query: Query<&mut ConsoleData>,
     time: Res<Time>,
 ) {
     let delta_t = time.elapsed_seconds_f64() - anim_data.start_time;
@@ -390,8 +443,10 @@ pub fn apply_animation(
         .start_position
         .lerp(anim_data.end_position, value as f32);
 
-    if data.is_opening && new_position.abs_diff_eq(anim_data.end_position, 1.0) {
-        data.fully_opened = true;
+    for mut data in data_query.iter_mut() {
+        if data.is_opening && new_position.abs_diff_eq(anim_data.end_position, 1.0) {
+            data.fully_opened = true;
+        }
     }
 
     if let Ok((_, mut style)) = console_query.get_single_mut() {
@@ -400,159 +455,206 @@ pub fn apply_animation(
     }
 }
 
+// shows logs that stored in `ConsoleData.messages` to console.
 pub fn update_logs_area(
-    data: Res<ConsoleData>,
+    interacting_npc_query: Query<&CurrentInteractingNPC, With<Player>>,
+    npc_query: Query<&Children, With<NPC>>,
+    mut data_query: Query<&mut ConsoleData>,
     asset_server: Res<AssetServer>,
     mut logs_area_query: Query<&mut Text, With<LogsArea>>,
 ) {
-    let sections = data
-        .messages
-        .iter()
-        .flat_map(|msg| {
-            let mut msg = msg.clone();
-            msg.push('\n');
+    let Ok(CurrentInteractingNPC(interacting_npc)) = interacting_npc_query.get_single() else {
+        return;
+    };
 
-            IntoIterator::into_iter([TextSection {
-                value: msg.clone(),
-                style: TextStyle {
-                    font: asset_server.load("fonts/VT323-Regular.ttf"),
-                    font_size: 16.,
-                    color: Color::rgba_u8(76, 207, 76, 255),
-                },
-            }])
-        })
-        .collect::<Vec<_>>();
+    if let Some(interacting_npc_entity) = interacting_npc {
+        let children_entity = npc_query.get(*interacting_npc_entity).unwrap();
+        for &child in children_entity.iter() {
+            // TODO: data not need to be mutable.
+            if let Ok(mut data) = data_query.get_mut(child) {
+                let sections = data
+                    .messages
+                    .iter()
+                    .flat_map(|msg| {
+                        let mut msg = msg.clone();
+                        msg.push('\n');
 
-    let mut text = logs_area_query.single_mut();
-    text.sections = sections;
+                        IntoIterator::into_iter([TextSection {
+                            value: msg.clone(),
+                            style: TextStyle {
+                                font: asset_server.load("fonts/VT323-Regular.ttf"),
+                                font_size: 16.,
+                                color: Color::rgba_u8(76, 207, 76, 255),
+                            },
+                        }])
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut text = logs_area_query.single_mut();
+                text.sections = sections;
+            }
+        }
+    }
 }
 
 pub fn update_enter_command(
     mut enter_command_text: Query<&mut Text, With<CommandLineText>>,
-    mut state: ResMut<ConsoleData>,
+    interacting_npc_query: Query<&CurrentInteractingNPC, With<Player>>,
+    npc_query: Query<&Children, With<NPC>>,
+    mut data_query: Query<&mut ConsoleData>,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
 ) {
-    let mut text = enter_command_text.single_mut();
-    text.sections = vec![];
+    // TODO: need to be refactored. functionize this checking CurrentInteractingNPC -> ConsoleData logic.
+    let Ok(CurrentInteractingNPC(interacting_npc)) = interacting_npc_query.get_single() else {
+        return;
+    };
 
-    if state.enter_command.len() > 144 {
-        let trimmed_command = state.enter_command[..144].to_string();
-        state.enter_command = trimmed_command;
+    if let Some(interacting_npc_entity) = interacting_npc {
+        let children_entity = npc_query.get(*interacting_npc_entity).unwrap();
+        for &child in children_entity.iter() {
+            if let Ok(mut state) = data_query.get_mut(child) {
+                let mut text = enter_command_text.single_mut();
+                text.sections = vec![];
+
+                if state.typed_command.len() > 144 {
+                    let trimmed_command = state.typed_command[..144].to_string();
+                    state.typed_command = trimmed_command;
+                }
+
+                let mut to_show = String::from(">  ");
+                to_show.push_str(&state.typed_command);
+
+                if (time.elapsed_seconds_f64() * 3.0) as u64 % 2 == 0 {
+                    to_show.push('_');
+                }
+
+                text.sections.push(TextSection {
+                    value: to_show,
+                    style: TextStyle {
+                        font: asset_server.load("fonts/VT323-Regular.ttf"),
+                        font_size: 20.,
+                        color: Color::rgba_u8(102, 255, 102, 255),
+                    },
+                });
+            }
+        }
     }
-
-    let mut to_show = String::from(">  ");
-    to_show.push_str(&state.enter_command);
-
-    if (time.elapsed_seconds_f64() * 3.0) as u64 % 2 == 0 {
-        to_show.push('_');
-    }
-
-    text.sections.push(TextSection {
-        value: to_show,
-        style: TextStyle {
-            font: asset_server.load("fonts/VT323-Regular.ttf"),
-            font_size: 20.,
-            color: Color::rgba_u8(102, 255, 102, 255),
-        },
-    });
 }
 
 pub fn handle_input_keys(
-    mut data: ResMut<ConsoleData>,
+    mut data_query: Query<(&Parent, &mut ConsoleData)>,
     mut evr_keys: EventReader<KeyboardInput>,
     keyboard_input: Res<Input<KeyCode>>,
     mut ev_writer: EventWriter<EnteredConsoleCommandEvent>,
+    npc_query: Query<Entity, With<NPC>>,
     // asset_server: Res<AssetServer>,
     // audio: Res<Audio>,
 ) {
-    // if the console is not open yet
-    if !data.fully_opened {
-        return;
-    }
+    for (parent, mut data) in data_query.iter_mut() {
+        // if the console is not open yet
+        if !data.fully_opened {
+            continue;
+        }
 
-    for ev in evr_keys.iter() {
-        if ev.state.is_pressed() {
-            // let random_key = rand::thread_rng().gen_range(1..10);
-            // audio.play(asset_server.load(format!("audio/keys/key-{}.mp3", random_key).as_str()));
+        // for opened npc console
+        if let Ok(npc) = npc_query.get(parent.get()) {
+            for ev in evr_keys.iter() {
+                if ev.state.is_pressed() {
+                    // let random_key = rand::thread_rng().gen_range(1..10);
+                    // audio.play(asset_server.load(format!("audio/keys/key-{}.mp3", random_key).as_str()));
 
-            if let Some(key_code) = ev.key_code {
-                match key_code {
-                    KeyCode::Back => {
-                        if !data.enter_command.is_empty() {
-                            data.enter_command.pop();
+                    if let Some(key_code) = ev.key_code {
+                        match key_code {
+                            KeyCode::Back => {
+                                if !data.typed_command.is_empty() {
+                                    data.typed_command.pop();
+                                }
+                            }
+                            KeyCode::Space => data.typed_command.push(' '),
+                            KeyCode::Tab => data.typed_command.push_str("  "),
+                            KeyCode::Comma => data.typed_command.push(','),
+                            KeyCode::Colon => data.typed_command.push(':'),
+                            KeyCode::Semicolon => data.typed_command.push(';'),
+                            KeyCode::Apostrophe => data.typed_command.push('\''),
+                            KeyCode::At => data.typed_command.push('@'),
+                            KeyCode::LBracket => data.typed_command.push('['),
+                            KeyCode::RBracket => data.typed_command.push(']'),
+                            KeyCode::Minus | KeyCode::NumpadSubtract => {
+                                data.typed_command.push('-')
+                            }
+                            KeyCode::Period | KeyCode::NumpadDecimal => {
+                                data.typed_command.push('.')
+                            }
+                            KeyCode::Asterisk | KeyCode::NumpadMultiply => {
+                                data.typed_command.push('*')
+                            }
+                            KeyCode::Slash | KeyCode::NumpadDivide => data.typed_command.push('/'),
+                            KeyCode::Plus | KeyCode::NumpadAdd => data.typed_command.push('+'),
+                            KeyCode::Key0 | KeyCode::Numpad0 => data.typed_command.push('0'),
+                            KeyCode::Key1 | KeyCode::Numpad1 => data.typed_command.push('1'),
+                            KeyCode::Key2 | KeyCode::Numpad2 => data.typed_command.push('2'),
+                            KeyCode::Key3 | KeyCode::Numpad3 => data.typed_command.push('3'),
+                            KeyCode::Key4 | KeyCode::Numpad4 => data.typed_command.push('4'),
+                            KeyCode::Key5 | KeyCode::Numpad5 => data.typed_command.push('5'),
+                            KeyCode::Key6 | KeyCode::Numpad6 => data.typed_command.push('6'),
+                            KeyCode::Key7 | KeyCode::Numpad7 => data.typed_command.push('7'),
+                            KeyCode::Key8 | KeyCode::Numpad8 => data.typed_command.push('8'),
+                            KeyCode::Key9 | KeyCode::Numpad9 => data.typed_command.push('9'),
+
+                            KeyCode::LShift
+                            | KeyCode::RShift
+                            | KeyCode::Escape
+                            | KeyCode::LAlt
+                            | KeyCode::RAlt
+                            | KeyCode::LControl
+                            | KeyCode::RControl
+                            | KeyCode::F1
+                            | KeyCode::Up
+                            | KeyCode::Down
+                            | KeyCode::Right
+                            | KeyCode::Left
+                            | KeyCode::F2
+                            | KeyCode::F3
+                            | KeyCode::F4
+                            | KeyCode::F5
+                            | KeyCode::F6
+                            | KeyCode::F7
+                            | KeyCode::F8
+                            | KeyCode::F9
+                            | KeyCode::F10
+                            | KeyCode::F11
+                            | KeyCode::F12
+                            | KeyCode::Insert
+                            | KeyCode::Delete
+                            | KeyCode::Grave
+                            | KeyCode::Backslash => {}
+
+                            KeyCode::Return => {
+                                // sending the command
+
+                                ev_writer.send(EnteredConsoleCommandEvent {
+                                    npc,
+                                    message: data.typed_command.clone(),
+                                });
+                                // clearing the input
+                                data.typed_command.clear();
+                            }
+                            _ => {
+                                let key_code_str = if keyboard_input.pressed(KeyCode::LShift)
+                                    || keyboard_input.pressed(KeyCode::RShift)
+                                {
+                                    format!("{:?}", key_code).to_uppercase()
+                                } else {
+                                    format!("{:?}", key_code).to_lowercase()
+                                };
+
+                                trace!("Pressed key: {:?}", key_code_str);
+                                data.typed_command.push_str(&key_code_str);
+                            }
                         }
-                    }
-                    KeyCode::Space => data.enter_command.push(' '),
-                    KeyCode::Tab => data.enter_command.push_str("  "),
-                    KeyCode::Comma => data.enter_command.push(','),
-                    KeyCode::Colon => data.enter_command.push(':'),
-                    KeyCode::Semicolon => data.enter_command.push(';'),
-                    KeyCode::Apostrophe => data.enter_command.push('\''),
-                    KeyCode::At => data.enter_command.push('@'),
-                    KeyCode::LBracket => data.enter_command.push('['),
-                    KeyCode::RBracket => data.enter_command.push(']'),
-                    KeyCode::Minus | KeyCode::NumpadSubtract => data.enter_command.push('-'),
-                    KeyCode::Period | KeyCode::NumpadDecimal => data.enter_command.push('.'),
-                    KeyCode::Asterisk | KeyCode::NumpadMultiply => data.enter_command.push('*'),
-                    KeyCode::Slash | KeyCode::NumpadDivide => data.enter_command.push('/'),
-                    KeyCode::Plus | KeyCode::NumpadAdd => data.enter_command.push('+'),
-                    KeyCode::Key0 | KeyCode::Numpad0 => data.enter_command.push('0'),
-                    KeyCode::Key1 | KeyCode::Numpad1 => data.enter_command.push('1'),
-                    KeyCode::Key2 | KeyCode::Numpad2 => data.enter_command.push('2'),
-                    KeyCode::Key3 | KeyCode::Numpad3 => data.enter_command.push('3'),
-                    KeyCode::Key4 | KeyCode::Numpad4 => data.enter_command.push('4'),
-                    KeyCode::Key5 | KeyCode::Numpad5 => data.enter_command.push('5'),
-                    KeyCode::Key6 | KeyCode::Numpad6 => data.enter_command.push('6'),
-                    KeyCode::Key7 | KeyCode::Numpad7 => data.enter_command.push('7'),
-                    KeyCode::Key8 | KeyCode::Numpad8 => data.enter_command.push('8'),
-                    KeyCode::Key9 | KeyCode::Numpad9 => data.enter_command.push('9'),
 
-                    KeyCode::LShift
-                    | KeyCode::RShift
-                    | KeyCode::Escape
-                    | KeyCode::LAlt
-                    | KeyCode::RAlt
-                    | KeyCode::LControl
-                    | KeyCode::RControl
-                    | KeyCode::F1
-                    | KeyCode::Up
-                    | KeyCode::Down
-                    | KeyCode::Right
-                    | KeyCode::Left
-                    | KeyCode::F2
-                    | KeyCode::F3
-                    | KeyCode::F4
-                    | KeyCode::F5
-                    | KeyCode::F6
-                    | KeyCode::F7
-                    | KeyCode::F8
-                    | KeyCode::F9
-                    | KeyCode::F10
-                    | KeyCode::F11
-                    | KeyCode::F12
-                    | KeyCode::Insert
-                    | KeyCode::Delete
-                    | KeyCode::Grave
-                    | KeyCode::Backslash => {}
-
-                    KeyCode::Return => {
-                        // sending the command
-                        ev_writer.send(EnteredConsoleCommandEvent(data.enter_command.clone()));
-                        // clearing the input
-                        data.enter_command.clear();
-                    }
-                    _ => {
-                        let key_code_str = if keyboard_input.pressed(KeyCode::LShift)
-                            || keyboard_input.pressed(KeyCode::RShift)
-                        {
-                            format!("{:?}", key_code).to_uppercase()
-                        } else {
-                            format!("{:?}", key_code).to_lowercase()
-                        };
-
-                        trace!("Pressed key: {:?}", key_code_str);
-                        data.enter_command.push_str(&key_code_str);
+                        info!("Console Typing: {:?}", data.typed_command);
                     }
                 }
             }
@@ -560,13 +662,15 @@ pub fn handle_input_keys(
     }
 }
 
-// TODO
+// TODO: modify this code, [`EnteredConsoleCommandEvent`], to send command input to the server (that interacts with chatGPT)
+// and returns the output as form of [`PrintConsoleEvent`], and display this to the console.
 pub fn commands_handler(
     mut cmd_reader: EventReader<EnteredConsoleCommandEvent>,
     mut console_writer: EventWriter<PrintConsoleEvent>,
-    mut data: ResMut<ConsoleData>,
+    npc_query: Query<&Children, With<NPC>>,
+    mut data_query: Query<&mut ConsoleData>,
 ) {
-    for EnteredConsoleCommandEvent(cmd) in cmd_reader.iter() {
+    for EnteredConsoleCommandEvent { npc, message: cmd } in cmd_reader.iter() {
         // Don't do anything if the string is empty
         if cmd.is_empty() {
             return;
@@ -578,19 +682,37 @@ pub fn commands_handler(
             // first send what the user typed
             let mut user_input = String::from("> ");
             user_input.push_str(cmd.clone().trim());
-            console_writer.send(PrintConsoleEvent(user_input));
+            console_writer.send(PrintConsoleEvent {
+                npc: *npc,
+                message: user_input,
+            });
         }
 
-        match args[0] {
-            "clear" => data.messages.clear(),
-            "help" => console_writer.send(PrintConsoleEvent(display_help())),
-            "motd" => console_writer.send(PrintConsoleEvent(print_motd(&mut System::new(), true))),
+        if let Ok(children) = npc_query.get(*npc) {
+            for &child in children.iter() {
+                if let Ok(mut data) = data_query.get_mut(child) {
+                    match args[0] {
+                        "clear" => data.messages.clear(),
+                        "help" => console_writer.send(PrintConsoleEvent {
+                            npc: *npc,
+                            message: display_help(),
+                        }),
+                        "motd" => console_writer.send(PrintConsoleEvent {
+                            npc: *npc,
+                            message: print_motd(&mut System::new(), true),
+                        }),
 
-            _ => {
-                console_writer.send(PrintConsoleEvent(format!(
-                    "I didn't understand the command: \"{}\"",
-                    args[0]
-                )));
+                        _ => {
+                            console_writer.send(PrintConsoleEvent {
+                                npc: *npc,
+                                message: format!(
+                                    "I didn't understand the command: \"{}\"",
+                                    args[0]
+                                ),
+                            });
+                        }
+                    }
+                }
             }
         }
     }

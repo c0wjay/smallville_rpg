@@ -62,6 +62,7 @@ fn main() {
         .register_type::<components::MoveLock>()
         .register_type::<components::Coordinate>()
         .register_type::<components::Delay>()
+        .register_type::<ui::ConsoleData>()
         .add_system(systems::setup_units)
         .add_system(systems::spawn_arm_sprite.after(systems::setup_units))
         .add_system(systems::spawn_weapon_sprite.after(systems::spawn_arm_sprite))

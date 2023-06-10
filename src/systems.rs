@@ -154,9 +154,7 @@ pub fn movement(
     for (mut velocity, mut facing, mut indices, move_lock) in &mut query {
         velocity.linvel.x = 0.;
         velocity.linvel.y = 0.;
-        info!("movement{:?}", move_lock.0);
         if !move_lock.0 {
-            info!("{:?}", move_lock.0);
             let right = if input.pressed(KeyCode::D) { 1. } else { 0. };
             let left = if input.pressed(KeyCode::A) { 1. } else { 0. };
             let up = if input.pressed(KeyCode::W) { 1. } else { 0. };

@@ -91,6 +91,9 @@ impl From<&EntityInstance> for ColliderBundle {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Player;
 
+#[derive(Component, Clone, Default)]
+pub struct CurrentInteractingNPC(pub Option<Entity>);
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct NPC;
 
@@ -104,6 +107,7 @@ pub struct PlayerBundle {
     #[bundle]
     pub collider_bundle: ColliderBundle,
     pub player: Player,
+    pub current_interacting_npc: CurrentInteractingNPC,
     #[worldly]
     pub worldly: Worldly,
     pub unit_size: UnitSize,
