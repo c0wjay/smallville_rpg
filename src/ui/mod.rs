@@ -1,11 +1,11 @@
-pub mod npc_console;
-use crate::state;
-pub use npc_console::*;
-
 use bevy::prelude::{
     App, CoreSet, IntoSystemAppConfig, IntoSystemConfig, IntoSystemConfigs, OnEnter, OnExit,
     OnUpdate, Plugin,
 };
+
+pub mod npc_console;
+use crate::state;
+pub use npc_console::*;
 
 pub struct ConsolePlugin;
 

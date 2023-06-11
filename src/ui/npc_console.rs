@@ -10,13 +10,15 @@ use bevy::{
     prelude::*,
     window::PrimaryWindow,
 };
+#[allow(unused_imports)]
 use rand::Rng;
 use sysinfo::{ProcessorExt, System, SystemExt, UserExt};
 
 use crate::{
-    components::{Coordinate, CurrentInteractingNPC, FaceDirection, Facing, MoveLock, Player, NPC},
-    map::EntityMap,
+    maps::{Coordinate, EntityGridMap},
+    sprites::{FaceDirection, Facing},
     state::AppState,
+    units::{CurrentInteractingNPC, Player, NPC},
 };
 
 const CONSOLE_HEIGHT: f32 = 0.4;
@@ -28,9 +30,7 @@ pub struct CommandLineText;
 #[derive(Component)]
 pub struct ConsoleUI;
 
-// TODO: `ConsoleData`, `PrintConsoleEvent`, `EnteredConsoleCommandEvent` should contains info about NPC (which interacts with player), to separate response by each NPCs.
-// Maybe `ConsoleData` will be child of NPC entity, not direct Component of it.
-// `ConsoleData` should be a component that NPC entities take. `PrintConsoleEvent` and `EnteredConsoleCommandEvent` should have field that describes which NPC entities emit them.
+// Child component of NPC entities. Stores console messages about what player talks to NPC.
 #[derive(Default, Component, Debug, Reflect)]
 pub struct ConsoleData {
     pub typed_command: String,
@@ -49,7 +49,7 @@ pub struct EnteredConsoleCommandEvent {
 
 // pushes messages in event `PrintConsoleEvent` to `ConsoleData.messages`.
 pub fn push_message_events_to_console(
-    mut npc_query: Query<Entity, With<NPC>>,
+    npc_query: Query<Entity, With<NPC>>,
     mut data_query: Query<(&Parent, &mut ConsoleData)>,
     mut ev_console_message: EventReader<PrintConsoleEvent>,
 ) {
@@ -308,10 +308,9 @@ fn display_bar(width: usize, value: f64, total_value: f64) -> String {
     res
 }
 
-// TODO: Make a link with this system and open_npc_console, that game should know which npc this console is interact with.
-// Maybe CurrentInteractingNPC component will be need in PlayerBundle?
+// Open or close console for npc. changes player's `CurrentInteractingNPC` component.
 pub fn interact_with_npc(
-    entity_map: Res<EntityMap>,
+    entity_map: Res<EntityGridMap>,
     mut player: Query<(&mut CurrentInteractingNPC, &Facing, &Coordinate), With<Player>>,
     npc: Query<Entity, With<NPC>>,
     input: Res<Input<KeyCode>>,
@@ -368,13 +367,12 @@ pub fn interact_with_npc(
 }
 
 pub fn open_npc_console(
-    mut interacting_npc_query: Query<&mut CurrentInteractingNPC, With<Player>>,
+    interacting_npc_query: Query<&CurrentInteractingNPC, With<Player>>,
     mut anim_data: ResMut<ConsoleAnimation>,
     mut data_query: Query<(&Parent, &mut ConsoleData)>,
     time: Res<Time>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
-    info!("Opening console");
     let Ok(current_window) = window.get_single() else {
         return;
     };
@@ -403,7 +401,6 @@ pub fn close_npc_console(
     time: Res<Time>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
-    info!("Closing console");
     let Ok(current_window) = window.get_single() else {
         return;
     };
@@ -412,7 +409,7 @@ pub fn close_npc_console(
         return;
     };
 
-    if let Some(mut interacting_npc_entity) = interacting_npc.0 {
+    if let Some(interacting_npc_entity) = interacting_npc.0 {
         if let Ok(npc_children) = npc_query.get(interacting_npc_entity) {
             for child in npc_children.iter() {
                 if let Ok(mut child_data) = data_query.get_mut(*child) {
@@ -459,7 +456,7 @@ pub fn apply_animation(
 pub fn update_logs_area(
     interacting_npc_query: Query<&CurrentInteractingNPC, With<Player>>,
     npc_query: Query<&Children, With<NPC>>,
-    mut data_query: Query<&mut ConsoleData>,
+    data_query: Query<&ConsoleData>,
     asset_server: Res<AssetServer>,
     mut logs_area_query: Query<&mut Text, With<LogsArea>>,
 ) {
@@ -470,8 +467,7 @@ pub fn update_logs_area(
     if let Some(interacting_npc_entity) = interacting_npc {
         let children_entity = npc_query.get(*interacting_npc_entity).unwrap();
         for &child in children_entity.iter() {
-            // TODO: data not need to be mutable.
-            if let Ok(mut data) = data_query.get_mut(child) {
+            if let Ok(data) = data_query.get(child) {
                 let sections = data
                     .messages
                     .iter()
