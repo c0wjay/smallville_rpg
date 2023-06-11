@@ -12,7 +12,7 @@ use bevy::{
 };
 #[allow(unused_imports)]
 use rand::Rng;
-use sysinfo::{ProcessorExt, System, SystemExt, UserExt};
+use sysinfo::{ProcessorExt, System, SystemExt};
 
 use crate::{
     maps::{Coordinate, EntityGridMap},
@@ -80,18 +80,21 @@ pub struct ScrollingList {
 
 pub fn spawn_console_data_in_npc(
     mut commands: Commands,
-    mut npc_query: Query<Entity, Added<NPC>>,
+    player_query: Query<&Name, With<Player>>,
+    mut npc_query: Query<(&Name, Entity), Added<NPC>>,
     mut console_writer: EventWriter<PrintConsoleEvent>,
 ) {
-    for npc in npc_query.iter_mut() {
-        let child = commands.spawn(ConsoleData::default()).id();
-        commands.entity(npc).push_children(&[child]);
+    if let Ok(player_name) = player_query.get_single() {
+        for (npc_name, npc) in npc_query.iter_mut() {
+            let child = commands.spawn(ConsoleData::default()).id();
+            commands.entity(npc).push_children(&[child]);
 
-        // TODO: This would be modified. motd should contains about NPC info.
-        console_writer.send(PrintConsoleEvent {
-            npc,
-            message: print_motd(&mut System::new(), true),
-        });
+            // Send Event contains npc entity and motd message to print.
+            console_writer.send(PrintConsoleEvent {
+                npc,
+                message: print_motd(player_name, npc_name, &mut System::new(), true),
+            });
+        }
     }
 }
 
@@ -243,8 +246,13 @@ pub fn build_ui(
         });
 }
 
-// TODO: add npc argument, and push npc info into motd.
-fn print_motd(sys: &mut System, should_refresh: bool) -> String {
+// Print Message of the Day. This is the first message that the player will see in console and contains info about NPC.
+fn print_motd(
+    player_name: &Name,
+    npc_name: &Name,
+    sys: &mut System,
+    should_refresh: bool,
+) -> String {
     if should_refresh {
         sys.refresh_cpu();
         sys.refresh_memory();
@@ -252,12 +260,10 @@ fn print_motd(sys: &mut System, should_refresh: bool) -> String {
         sys.refresh_users_list();
     }
 
-    let mut res = String::from("Welcome to Android Console\n");
+    let mut res = String::from(&format!("Welcome to {}'s Console\n", npc_name.as_str()));
     res.push_str("--------------------------\n");
 
-    if let Some(user) = sys.users().last() {
-        res.push_str(&format!("Username: {}\n\n", user.name()));
-    }
+    res.push_str(&format!("Username: {}\n\n", player_name.as_str()));
 
     res.push_str(&format!(
         "System name:             {:?}\n",
@@ -663,7 +669,8 @@ pub fn handle_input_keys(
 pub fn commands_handler(
     mut cmd_reader: EventReader<EnteredConsoleCommandEvent>,
     mut console_writer: EventWriter<PrintConsoleEvent>,
-    npc_query: Query<&Children, With<NPC>>,
+    player_query: Query<&Name, With<Player>>,
+    npc_query: Query<(&Children, &Name), With<NPC>>,
     mut data_query: Query<&mut ConsoleData>,
 ) {
     for EnteredConsoleCommandEvent { npc, message: cmd } in cmd_reader.iter() {
@@ -684,7 +691,7 @@ pub fn commands_handler(
             });
         }
 
-        if let Ok(children) = npc_query.get(*npc) {
+        if let Ok((children, npc_name)) = npc_query.get(*npc) {
             for &child in children.iter() {
                 if let Ok(mut data) = data_query.get_mut(child) {
                     match args[0] {
@@ -693,10 +700,18 @@ pub fn commands_handler(
                             npc: *npc,
                             message: display_help(),
                         }),
-                        "motd" => console_writer.send(PrintConsoleEvent {
-                            npc: *npc,
-                            message: print_motd(&mut System::new(), true),
-                        }),
+                        "motd" => {
+                            let player_name = player_query.get_single().unwrap(); // TODO: need to implement error handling. (it seems that player_query always returns Some(&name), but..)
+                            console_writer.send(PrintConsoleEvent {
+                                npc: *npc,
+                                message: print_motd(
+                                    player_name,
+                                    npc_name,
+                                    &mut System::new(),
+                                    true,
+                                ),
+                            })
+                        }
 
                         _ => {
                             console_writer.send(PrintConsoleEvent {

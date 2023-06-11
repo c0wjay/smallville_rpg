@@ -11,7 +11,7 @@
 	"iid": "a3386460-7820-11ed-b6fd-157a63b4d02d",
 	"jsonVersion": "1.3.3",
 	"appBuildId": 467698,
-	"nextUid": 167,
+	"nextUid": 169,
 	"identifierStyle": "Capitalize",
 	"toc": [ {
 		"identifier": "Player",
@@ -27,12 +27,12 @@
 			"worldIid": "c9ef2d10-c640-11ed-ad34-f553e1d803f9",
 			"levelIid": "d53f9950-c640-11ed-8430-4942c04951ff",
 			"layerIid": "d53f9951-c640-11ed-8430-3f3f71a3daf1",
-			"entityIid": "0f48cf30-ed50-11ed-bfe5-afaf20b4feb1"
+			"entityIid": "68be0b90-ed50-11ed-bfe5-bd7bc0db64f1"
 		}, {
 			"worldIid": "c9ef2d10-c640-11ed-ad34-f553e1d803f9",
 			"levelIid": "d53f9950-c640-11ed-8430-4942c04951ff",
 			"layerIid": "d53f9951-c640-11ed-8430-3f3f71a3daf1",
-			"entityIid": "68be0b90-ed50-11ed-bfe5-bd7bc0db64f1"
+			"entityIid": "efd1a6c0-ed50-11ed-9bf1-659dee2cd38a"
 		} ]
 	} ],
 	"worldLayout": "GridVania",
@@ -819,6 +819,43 @@
 			"pivotY": 0.5,
 			"fieldDefs": [
 				{
+					"identifier": "name",
+					"doc": null,
+					"__type": "String",
+					"uid": 168,
+					"type": "F_String",
+					"isArray": false,
+					"canBeNull": false,
+					"arrayMinLength": null,
+					"arrayMaxLength": null,
+					"editorDisplayMode": "Hidden",
+					"editorDisplayScale": 0,
+					"editorDisplayPos": "Above",
+					"editorLinkStyle": "StraightArrow",
+					"editorAlwaysShow": false,
+					"editorShowInWorld": true,
+					"editorCutLongValues": true,
+					"editorTextSuffix": null,
+					"editorTextPrefix": null,
+					"useForSmartColor": false,
+					"min": null,
+					"max": null,
+					"regex": null,
+					"acceptFileTypes": null,
+					"defaultOverride": {
+						"id": "V_String",
+						"params": ["John"]
+					},
+					"textLanguageMode": null,
+					"symmetricalRef": false,
+					"autoChainRef": true,
+					"allowOutOfLevelRef": true,
+					"allowedRefs": "OnlySame",
+					"allowedRefsEntityUid": null,
+					"allowedRefTags": [],
+					"tilesetUid": null
+				},
+				{
 					"identifier": "life",
 					"doc": null,
 					"__type": "Int",
@@ -920,6 +957,43 @@
 			"pivotX": 0.5,
 			"pivotY": 0.5,
 			"fieldDefs": [
+				{
+					"identifier": "name",
+					"doc": null,
+					"__type": "String",
+					"uid": 167,
+					"type": "F_String",
+					"isArray": false,
+					"canBeNull": false,
+					"arrayMinLength": null,
+					"arrayMaxLength": null,
+					"editorDisplayMode": "Hidden",
+					"editorDisplayScale": 0,
+					"editorDisplayPos": "Above",
+					"editorLinkStyle": "StraightArrow",
+					"editorAlwaysShow": false,
+					"editorShowInWorld": true,
+					"editorCutLongValues": true,
+					"editorTextSuffix": null,
+					"editorTextPrefix": null,
+					"useForSmartColor": false,
+					"min": null,
+					"max": null,
+					"regex": null,
+					"acceptFileTypes": null,
+					"defaultOverride": {
+						"id": "V_String",
+						"params": ["John"]
+					},
+					"textLanguageMode": null,
+					"symmetricalRef": false,
+					"autoChainRef": true,
+					"allowOutOfLevelRef": true,
+					"allowedRefs": "OnlySame",
+					"allowedRefsEntityUid": null,
+					"allowedRefTags": [],
+					"tilesetUid": null
+				},
 				{
 					"identifier": "life",
 					"doc": null,
@@ -2483,6 +2557,7 @@
 							"defUid": 59,
 							"px": [168,168],
 							"fieldInstances": [
+								{ "__identifier": "name", "__type": "String", "__value": "John", "__tile": null, "defUid": 168, "realEditorValues": [] },
 								{ "__identifier": "life", "__type": "Int", "__value": 100, "__tile": null, "defUid": 61, "realEditorValues": [] },
 								{ "__identifier": "ysort", "__type": "Int", "__value": 5, "__tile": null, "defUid": 60, "realEditorValues": [] }
 							]
@@ -2562,23 +2637,6 @@
 						},
 						{
 							"__identifier": "NPC",
-							"__grid": [11,5],
-							"__pivot": [0.5,0.5],
-							"__tags": ["actor"],
-							"__tile": { "tilesetUid": 165, "x": 0, "y": 0, "w": 24, "h": 24 },
-							"__smartColor": "#03CB7C",
-							"iid": "0f48cf30-ed50-11ed-bfe5-afaf20b4feb1",
-							"width": 16,
-							"height": 16,
-							"defUid": 161,
-							"px": [184,88],
-							"fieldInstances": [
-								{ "__identifier": "life", "__type": "Int", "__value": 100, "__tile": null, "defUid": 162, "realEditorValues": [] },
-								{ "__identifier": "ammo", "__type": "Int", "__value": 10, "__tile": null, "defUid": 163, "realEditorValues": [] }
-							]
-						},
-						{
-							"__identifier": "NPC",
 							"__grid": [19,4],
 							"__pivot": [0.5,0.5],
 							"__tags": ["actor"],
@@ -2590,6 +2648,31 @@
 							"defUid": 161,
 							"px": [312,72],
 							"fieldInstances": [
+								{ "__identifier": "name", "__type": "String", "__value": "Pretty", "__tile": null, "defUid": 167, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Pretty"]
+								}] },
+								{ "__identifier": "life", "__type": "Int", "__value": 100, "__tile": null, "defUid": 162, "realEditorValues": [] },
+								{ "__identifier": "ammo", "__type": "Int", "__value": 10, "__tile": null, "defUid": 163, "realEditorValues": [] }
+							]
+						},
+						{
+							"__identifier": "NPC",
+							"__grid": [11,5],
+							"__pivot": [0.5,0.5],
+							"__tags": ["actor"],
+							"__tile": { "tilesetUid": 165, "x": 0, "y": 0, "w": 24, "h": 24 },
+							"__smartColor": "#03CB7C",
+							"iid": "efd1a6c0-ed50-11ed-9bf1-659dee2cd38a",
+							"width": 16,
+							"height": 16,
+							"defUid": 161,
+							"px": [184,88],
+							"fieldInstances": [
+								{ "__identifier": "name", "__type": "String", "__value": "Cathy", "__tile": null, "defUid": 167, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Cathy"]
+								}] },
 								{ "__identifier": "life", "__type": "Int", "__value": 100, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "ammo", "__type": "Int", "__value": 10, "__tile": null, "defUid": 163, "realEditorValues": [] }
 							]

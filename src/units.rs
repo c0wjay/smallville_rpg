@@ -1,9 +1,9 @@
 use bevy::{
-    prelude::{Added, App, Bundle, Component, Entity, Or, Plugin, Query},
+    prelude::{Added, App, Bundle, Component, Entity, Name, Or, Plugin, Query},
     sprite::SpriteSheetBundle,
 };
 use bevy_ecs_ldtk::{
-    prelude::{LdtkEntity, LdtkEntityAppExt},
+    prelude::{LdtkEntity, LdtkEntityAppExt, LdtkFields},
     EntityInstance, Worldly,
 };
 
@@ -36,6 +36,8 @@ pub struct PlayerBundle {
     #[from_entity_instance]
     #[bundle]
     pub collider_bundle: ColliderBundle,
+    #[with(name_from_ldtk_field)]
+    pub name: Name,
     pub player: Player,
     pub current_interacting_npc: CurrentInteractingNPC,
     #[worldly]
@@ -61,6 +63,8 @@ pub struct NPCBundle {
     #[from_entity_instance]
     #[bundle]
     pub collider_bundle: ColliderBundle,
+    #[with(name_from_ldtk_field)]
+    pub name: Name,
     pub npc: NPC,
     #[worldly]
     pub worldly: Worldly,
@@ -91,6 +95,15 @@ pub struct CurrentInteractingNPC(pub Option<Entity>);
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct NPC;
+
+fn name_from_ldtk_field(entity_instance: &EntityInstance) -> Name {
+    Name::new(
+        entity_instance
+            .get_string_field("name")
+            .expect("entity should have non-nullable name string field")
+            .clone(),
+    )
+}
 
 pub fn setup(mut query: Query<(&mut UnitSize, &mut YSort), Or<(Added<Player>, Added<NPC>)>>) {
     for (mut unit_size, mut ysort) in &mut query {
