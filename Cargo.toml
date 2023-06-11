@@ -19,6 +19,14 @@ bevy-inspector-egui = "0.18.3"
 bevy-inspector-egui-rapier = "0.9.0"
 bevy_ecs_ldtk = "0.7.0"
 bevy_rapier2d = "0.21.0"
-chatgpt_rs = "1.1.10"
 rand = "0.8.5"
 sysinfo = "0.22.5"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+chatgpt_rs = "1.1.10"
+tokio = { version = "1", features = ["full"] }
+bevy-tokio-tasks = "0.10.2"
+
+# reqwest = { version = "0.11.16", features = ["cookies"] }
+# tokio-tungstenite = { version = "0.19.0", features = ["native-tls"] }
+# tungstenite = { version = "0.19.0", features = ["native-tls"] }

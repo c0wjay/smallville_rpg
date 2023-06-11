@@ -2,6 +2,7 @@ use bevy::prelude::{
     App, CoreSet, IntoSystemAppConfig, IntoSystemConfig, IntoSystemConfigs, OnEnter, OnExit,
     OnUpdate, Plugin,
 };
+use bevy_tokio_tasks::TokioTasksPlugin;
 
 pub mod npc_console;
 use crate::state;
@@ -12,7 +13,9 @@ pub struct ConsolePlugin;
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(build_ui)
-            // .add_system(build_ui.in_schedule(OnExit(state::AppState::MainMenu)))
+            // .add_system(build_ui.in_schedule(OnExit(state::AppState::MainMenu)))     // TODO: Implement this after MainMenu UI is implemented.
+            .init_resource::<AskGPT>() // TODO: Remove this after changing `AskGPT` to Component.
+            .add_plugin(TokioTasksPlugin::default())
             .add_system(open_npc_console.in_schedule(OnEnter(state::AppState::ConsoleOpenedState)))
             .add_systems(
                 (update_logs_area, handle_input_keys, update_enter_command)
@@ -36,7 +39,7 @@ impl Plugin for ConsolePlugin {
                 ..Default::default()
             })
             .add_system(spawn_console_data_in_npc.in_base_set(CoreSet::PostUpdate))
-        // .insert_resource(ConsoleData::default())
-        ;
+            .add_system(send_message_to_chatgpt)
+            .add_system(handle_tasks);
     }
 }

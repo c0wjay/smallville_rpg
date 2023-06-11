@@ -10,9 +10,13 @@ use bevy::{
     prelude::*,
     window::PrimaryWindow,
 };
+use chatgpt::prelude::ChatGPT;
 #[allow(unused_imports)]
 use rand::Rng;
 use sysinfo::{ProcessorExt, System, SystemExt};
+
+#[cfg(not(target_family = "wasm"))]
+use bevy_tokio_tasks::TokioTasksRuntime;
 
 use crate::{
     maps::{Coordinate, EntityGridMap},
@@ -20,6 +24,9 @@ use crate::{
     state::AppState,
     units::{CurrentInteractingNPC, Player, NPC},
 };
+
+#[cfg(not(target_family = "wasm"))]
+pub type TasksRuntime = TokioTasksRuntime;
 
 const CONSOLE_HEIGHT: f32 = 0.4;
 
@@ -45,6 +52,34 @@ pub struct PrintConsoleEvent {
 pub struct EnteredConsoleCommandEvent {
     pub npc: Entity,
     pub message: String,
+}
+
+// TODO: `AskGPT` should be a component (child of NPC entity), not a global resource. This is a temporary solution.
+// What I imagine is, when player talks to NPC, `AskGPT` child entity is pushed under NPC entity, and when get response from chatGPT, `GPTResponse` child entity is pushed under `AskGPT` entity.
+// To accomplish this, response of chatGPT should specify which NPC entity is destined to.
+// Maybe we need to modify receiver library,
+// or wrapping npc info in chatgpt request string, and get some kind of json-formatted response, and parse it.
+#[derive(Resource, Debug)]
+pub struct AskGPT {
+    pub is_processed: bool,
+    pub npc: Entity,
+    pub message: String,
+}
+
+impl Default for AskGPT {
+    fn default() -> Self {
+        AskGPT {
+            is_processed: true,
+            npc: Entity::from_raw(0),
+            message: String::new(),
+        }
+    }
+}
+
+#[derive(Component, Debug)]
+pub struct GPTResponse {
+    npc: Entity,
+    message: String,
 }
 
 // pushes messages in event `PrintConsoleEvent` to `ConsoleData.messages`.
@@ -245,6 +280,10 @@ pub fn build_ui(
                 });
         });
 }
+
+// pub fn setup_receiver(mut commands: Commands) {
+//     commands.init_resource::<GPTReceiver>();
+// }
 
 // Print Message of the Day. This is the first message that the player will see in console and contains info about NPC.
 fn print_motd(
@@ -591,7 +630,15 @@ pub fn handle_input_keys(
                             KeyCode::Asterisk | KeyCode::NumpadMultiply => {
                                 data.typed_command.push('*')
                             }
-                            KeyCode::Slash | KeyCode::NumpadDivide => data.typed_command.push('/'),
+                            KeyCode::Slash | KeyCode::NumpadDivide => {
+                                if keyboard_input.pressed(KeyCode::LShift)
+                                    || keyboard_input.pressed(KeyCode::RShift)
+                                {
+                                    data.typed_command.push('?');
+                                } else {
+                                    data.typed_command.push('/');
+                                }
+                            }
                             KeyCode::Plus | KeyCode::NumpadAdd => data.typed_command.push('+'),
                             KeyCode::Key0 | KeyCode::Numpad0 => data.typed_command.push('0'),
                             KeyCode::Key1 | KeyCode::Numpad1 => data.typed_command.push('1'),
@@ -655,8 +702,6 @@ pub fn handle_input_keys(
                                 data.typed_command.push_str(&key_code_str);
                             }
                         }
-
-                        info!("Console Typing: {:?}", data.typed_command);
                     }
                 }
             }
@@ -667,6 +712,7 @@ pub fn handle_input_keys(
 // TODO: modify this code, [`EnteredConsoleCommandEvent`], to send command input to the server (that interacts with chatGPT)
 // and returns the output as form of [`PrintConsoleEvent`], and display this to the console.
 pub fn commands_handler(
+    mut commands: Commands,
     mut cmd_reader: EventReader<EnteredConsoleCommandEvent>,
     mut console_writer: EventWriter<PrintConsoleEvent>,
     player_query: Query<&Name, With<Player>>,
@@ -679,7 +725,7 @@ pub fn commands_handler(
             return;
         }
 
-        let args: Vec<&str> = cmd.trim().split(' ').collect();
+        let mut args: Vec<&str> = cmd.trim().split(' ').collect();
 
         if args[0] != "clear" {
             // first send what the user typed
@@ -712,6 +758,36 @@ pub fn commands_handler(
                                 ),
                             })
                         }
+                        "ask" => {
+                            if args.len() < 2 {
+                                console_writer.send(PrintConsoleEvent {
+                                    npc: *npc,
+                                    message: "Please specify a question".to_string(),
+                                });
+                                return;
+                            }
+
+                            args.remove(0);
+                            let ask: String = args.join(" ").to_string();
+
+                            console_writer.send(PrintConsoleEvent {
+                                npc: *npc,
+                                message: "Waiting for chatGPT response...".to_string(),
+                            });
+                            commands.insert_resource(AskGPT {
+                                is_processed: false,
+                                npc: *npc,
+                                message: ask.clone(),
+                            });
+                            // let ask_gpt = commands
+                            //     .spawn(AskGPT {
+                            //         is_processed: false,
+                            //         npc: *npc,
+                            //         message: ask.clone(),
+                            //     })
+                            //     .id();
+                            // commands.entity(*npc).push_children(&[ask_gpt]);
+                        }
 
                         _ => {
                             console_writer.send(PrintConsoleEvent {
@@ -729,6 +805,58 @@ pub fn commands_handler(
     }
 }
 
+pub fn send_message_to_chatgpt(runtime: ResMut<TasksRuntime>, mut ask_gpt: ResMut<AskGPT>) {
+    // for mut ask_gpt in &mut gpt_query.iter_mut() {
+    if ask_gpt.is_processed {
+        return;
+    }
+    ask_gpt.is_processed = true;
+
+    let message = ask_gpt.message.clone();
+    // let npc = ask_gpt.npc;
+
+    runtime.spawn_background_task(|mut ctx| async move {
+        let openai_key = env!("OPENAI_API_KEY");
+        let client = ChatGPT::new(openai_key).unwrap();
+        let result = client.send_message(message).await;
+
+        match result {
+            Ok(response) => {
+                info!("success");
+                ctx.run_on_main_thread(move |ctx| {
+                    let ask_gpt = ctx.world.get_resource::<AskGPT>().unwrap();
+                    // let gpt_query = ctx.world.query::<&AskGPT>();
+                    ctx.world.spawn(GPTResponse {
+                        npc: ask_gpt.npc,
+                        message: response.message().content.clone(),
+                    });
+                    // ask_gpt.is_processed = true;
+                })
+                .await;
+            }
+            Err(_) => {
+                info!("Failed to receive message to chatGPT");
+            }
+        }
+    });
+    // }
+}
+
+pub fn handle_tasks(
+    mut commands: Commands,
+    gpt_tasks: Query<(Entity, &GPTResponse)>,
+    mut console_writer: EventWriter<PrintConsoleEvent>,
+) {
+    for (entity, task) in &gpt_tasks {
+        warn!("Polling future: {:?}", task);
+        console_writer.send(PrintConsoleEvent {
+            npc: task.npc,
+            message: task.message.clone(),
+        });
+        commands.entity(entity).remove::<GPTResponse>();
+    }
+}
+
 fn display_help() -> String {
     let mut res = String::from("\nSHOWING AVAILABLE COMMANDS\n");
 
@@ -738,6 +866,7 @@ fn display_help() -> String {
     res.push_str("- help : Displays this message\n");
     res.push_str("- clear : Clears commands on the screen\n");
     res.push_str("- motd : Prints informations about YOUR computer\n");
+    res.push_str("- ask <questions> : ask some questions to chatGPT\n");
 
     res
 }
