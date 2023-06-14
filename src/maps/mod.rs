@@ -1,4 +1,4 @@
-use bevy::prelude::{App, IntoSystemSetConfig, Plugin};
+use bevy::prelude::{App, IntoSystemAppConfig, IntoSystemConfig, IntoSystemSetConfig, Plugin};
 use bevy_ecs_ldtk::{
     prelude::LdtkIntCellAppExt, LdtkSettings, LdtkSystemSet, LevelSelection, LevelSpawnBehavior,
     SetClearColor,
@@ -26,8 +26,11 @@ impl Plugin for MapPlugin {
                 ..Default::default()
             })
             .insert_resource(map::EntityGridMap::new())
+            .insert_resource(map::TileGridMap::new())
             .register_ldtk_int_cell::<WallBundle>(1)
             .add_startup_system(setup)
+            .add_system(insert_wall)
+            .add_system(insert_floor)
             .add_system(change_coordinate_of_moved_entity)
             .add_system(update_level_selection);
     }

@@ -15,6 +15,7 @@ mod sprites;
 mod state;
 mod ui;
 mod units;
+mod path_finder;
 
 fn main() {
     App::new()
