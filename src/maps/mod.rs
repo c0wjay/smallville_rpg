@@ -1,4 +1,4 @@
-use bevy::prelude::{App, IntoSystemAppConfig, IntoSystemConfig, IntoSystemSetConfig, Plugin};
+use bevy::prelude::{App, IntoSystemConfig, IntoSystemSetConfig, Plugin};
 use bevy_ecs_ldtk::{
     prelude::LdtkIntCellAppExt, LdtkSettings, LdtkSystemSet, LevelSelection, LevelSpawnBehavior,
     SetClearColor,
@@ -29,7 +29,8 @@ impl Plugin for MapPlugin {
             .insert_resource(map::TileGridMap::new())
             .register_ldtk_int_cell::<WallBundle>(1)
             .add_startup_system(setup)
-            .add_system(insert_wall)
+            // wall should be inserted after floor in constructiong tile grid map.
+            .add_system(insert_wall.after(insert_floor))
             .add_system(insert_floor)
             .add_system(change_coordinate_of_moved_entity)
             .add_system(update_level_selection);

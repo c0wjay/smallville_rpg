@@ -10,12 +10,12 @@ mod combat;
 mod constants;
 mod inspector;
 mod maps;
+mod path_finder;
 mod physics;
 mod sprites;
 mod state;
 mod ui;
 mod units;
-mod path_finder;
 
 fn main() {
     App::new()
@@ -31,6 +31,7 @@ fn main() {
         // StatePlugin should be front of ConsolePlugin due to `add_state`.
         .add_plugin(state::StatePlugin)
         .add_plugin(ui::ConsolePlugin)
+        .add_plugin(path_finder::AIPlugin)
         .add_plugin(inspector::InspectorPlugin)
         .run();
 }

@@ -1,6 +1,6 @@
 use bevy::prelude::{
-    info, Added, Changed, Commands, Component, Entity, GlobalTransform, Handle, Name, Parent,
-    Query, Reflect, ResMut, Resource, Transform, With, Without,
+    info, Added, Changed, Component, Entity, GlobalTransform, Handle, Parent, Query, Reflect,
+    ResMut, Resource, Transform, With, Without,
 };
 use bevy_ecs_ldtk::LdtkLevel;
 use bevy_ecs_tilemap::tiles::TilePos;
@@ -76,52 +76,6 @@ impl EntityGridMap {
     #[allow(dead_code)]
     pub fn get_mut(&mut self, coordinate: (i32, i32)) -> Option<&mut Vec<Entity>> {
         self.entity_map.get_mut(&coordinate)
-    }
-}
-
-#[derive(Debug, Resource)]
-pub struct TileGridMap {
-    pub tile_map: HashMap<(i32, i32), (Entity, TileType)>,
-    pub max_x: i32,
-    pub max_y: i32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TileType {
-    Wall,
-    Floor,
-}
-
-impl TileGridMap {
-    pub fn new() -> Self {
-        TileGridMap {
-            tile_map: HashMap::new(),
-            max_x: 0,
-            max_y: 0,
-        }
-    }
-
-    pub fn insert(&mut self, coordinate: (i32, i32), entity: Entity, tile_type: TileType) {
-        if self.max_x < coordinate.0 {
-            self.max_x = coordinate.0;
-        }
-        if self.max_y < coordinate.1 {
-            self.max_y = coordinate.1;
-        }
-        self.tile_map.insert(coordinate, (entity, tile_type));
-    }
-
-    pub fn delete(&mut self, coordinate: (i32, i32)) {
-        self.tile_map.remove(&coordinate);
-        // Maybe refreshing values of max_x and max_y is not needed.
-    }
-
-    pub fn get(&self, coordinate: (i32, i32)) -> Option<&(Entity, TileType)> {
-        self.tile_map.get(&coordinate)
-    }
-
-    pub fn contains(&self, coordinate: (i32, i32)) -> bool {
-        self.tile_map.contains_key(&coordinate)
     }
 }
 
@@ -220,6 +174,55 @@ pub fn change_coordinate_of_moved_entity(
     }
 }
 
+#[derive(Debug, Resource)]
+pub struct TileGridMap {
+    pub tile_map: HashMap<(i32, i32), (Entity, TileType)>,
+    pub max_x: i32,
+    pub max_y: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileType {
+    Wall,
+    Floor,
+}
+
+impl TileGridMap {
+    pub fn new() -> Self {
+        TileGridMap {
+            tile_map: HashMap::new(),
+            max_x: 0,
+            max_y: 0,
+        }
+    }
+
+    pub fn insert(&mut self, coordinate: (i32, i32), entity: Entity, tile_type: TileType) {
+        if self.max_x < coordinate.0 {
+            self.max_x = coordinate.0;
+        }
+        if self.max_y < coordinate.1 {
+            self.max_y = coordinate.1;
+        }
+        self.tile_map.insert(coordinate, (entity, tile_type));
+    }
+
+    #[allow(dead_code)]
+    pub fn delete(&mut self, coordinate: (i32, i32)) {
+        self.tile_map.remove(&coordinate);
+        // Maybe refreshing values of max_x and max_y is not needed.
+    }
+
+    #[allow(dead_code)]
+    pub fn get(&self, coordinate: (i32, i32)) -> Option<&(Entity, TileType)> {
+        self.tile_map.get(&coordinate)
+    }
+
+    #[allow(dead_code)]
+    pub fn contains(&self, coordinate: (i32, i32)) -> bool {
+        self.tile_map.contains_key(&coordinate)
+    }
+}
+
 // TODO: need to delete wall entity from entity map
 pub fn insert_wall(
     mut tile_map: ResMut<TileGridMap>,
@@ -245,7 +248,7 @@ pub fn insert_floor(
     mut tile_map: ResMut<TileGridMap>,
     gparent_query: Query<&GlobalTransform, With<Handle<LdtkLevel>>>,
     parent_query: Query<(&Parent, &Transform), Without<Wall>>,
-    floor_query: Query<(Entity, &Parent, &Transform), Added<TilePos>>,
+    floor_query: Query<(Entity, &Parent, &Transform), (Without<Wall>, Added<TilePos>)>,
 ) {
     for (entity, parent, transform) in floor_query.iter() {
         if let Ok((gparent, p_transform)) = parent_query.get(parent.get()) {
@@ -255,7 +258,9 @@ pub fn insert_floor(
                 let x = ((translation.x - GRID_OFFSET) / GRID_SIZE) as i32;
                 let y = ((translation.y - GRID_OFFSET) / GRID_SIZE) as i32;
                 tile_map.insert((x, y), entity, TileType::Floor);
-                info!("insert floor: {:?}, {:?}", entity, (x, y));
+                if x == 0 || y == 0 {
+                    info!("insert floor: {:?}, {:?}", entity, (x, y));
+                }
             }
         }
     }

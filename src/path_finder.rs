@@ -1,9 +1,13 @@
 // In this game, the player navigates to wherever you click
 
-use bevy::{prelude::*, sprite::Anchor};
-use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
-use rand::{thread_rng, Rng};
+use bevy::prelude::*;
 use seldom_map_nav::prelude::*;
+
+use crate::{
+    constants::{GRID_SIZE, UNIT_SIZE},
+    maps::{insert_wall, TileGridMap, TileType},
+    units::Player,
+};
 
 pub struct AIPlugin;
 
@@ -14,73 +18,60 @@ impl Plugin for AIPlugin {
             // The type parameter is the position component that you use
             .add_plugin(MapNavPlugin::<Transform>::default())
             .init_resource::<CursorPos>()
-            .add_startup_system(init)
-            .add_systems((update_cursor_pos, move_player).chain())
-            .register_type::<seldom_map_nav::prelude::Pathfind>()
-            .register_type::<seldom_map_nav::prelude::Nav>();
+            .add_system(setup.after(insert_wall))
+            .add_systems((update_cursor_pos, move_player).chain());
     }
 }
 
-const MAP_SIZE: UVec2 = UVec2::new(24, 24);
-const TILE_SIZE: Vec2 = Vec2::new(32., 32.);
-// This is the radius of a square around the player that should not intersect with the terrain
-const PLAYER_CLEARANCE: f32 = 8.;
+fn setup(
+    mut commands: Commands,
+    tile_grid_map: Res<TileGridMap>,
+    navmesheses: Query<Entity, With<Navmeshes>>,
+) {
+    if tile_grid_map.is_changed() {
+        let max_x = tile_grid_map.max_x;
+        let max_y = tile_grid_map.max_y;
+        let mut tilemap: Vec<Navability> = Vec::with_capacity(((max_x + 1) * (max_y + 1)) as usize);
 
-fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle {
-        // Centering the camera
-        transform: Transform::from_translation((MAP_SIZE.as_vec2() * TILE_SIZE / 2.).extend(999.9)),
-        ..default()
-    });
-
-    let mut rng = thread_rng();
-    // Randomly generate the tilemap
-    let tilemap = [(); (MAP_SIZE.x * MAP_SIZE.y) as usize].map(|_| match rng.gen_bool(0.8) {
-        true => Navability::Navable,
-        false => Navability::Solid,
-    });
-    info!("Tilemap: {:?}", tilemap);
-    let navability = |pos: UVec2| tilemap[(pos.y * MAP_SIZE.x + pos.x) as usize];
-
-    // Spawn images for the tiles
-    let tile_image = asset_server.load("tile.png");
-    let mut player_pos = default();
-    for x in 0..MAP_SIZE.x {
-        for y in 0..MAP_SIZE.y {
-            let pos = UVec2::new(x, y);
-            if let Navability::Navable = navability(pos) {
-                let pos = UVec2::new(x, y).as_vec2() * TILE_SIZE;
-                player_pos = pos;
-
-                commands.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        anchor: Anchor::BottomLeft,
-                        ..default()
-                    },
-                    transform: Transform::from_translation(pos.extend(0.)),
-                    texture: tile_image.clone(),
-                    ..default()
-                });
+        for y in 0..=max_y {
+            for x in 0..=max_x {
+                if let Some((_, tile)) = tile_grid_map.tile_map.get(&(x, y)) {
+                    match tile {
+                        TileType::Floor => tilemap.push(Navability::Navable),
+                        TileType::Wall => tilemap.push(Navability::Solid),
+                    }
+                } else {
+                    tilemap.push(Navability::Solid);
+                }
             }
         }
+
+        let navability = |pos: UVec2| tilemap[(pos.y * (max_x as u32 + 1) + pos.x) as usize];
+
+        // Here's the important bit:
+        warn!("{:?}, {:?}", tilemap.len(), (max_x + 1) * (max_y + 1));
+
+        // Spawn the tilemap with a `Navmeshes` component
+        let navmeshes = Navmeshes::generate(
+            UVec2::new(max_x as u32 + 1, max_y as u32 + 1),
+            Vec2::new(GRID_SIZE, GRID_SIZE),
+            navability,
+            [UNIT_SIZE - 0.01],
+        );
+
+        // Unit size radius is slightly smaller than half of grid size.
+        // This prevent Triangulation Error.
+        if let Ok(navmeshes) = navmeshes {
+            warn!("Do");
+            for entity in navmesheses.iter() {
+                commands.entity(entity).despawn();
+            }
+            // info!("Tilemap: {:?}", &navmeshes);
+            commands.spawn(navmeshes);
+        } else {
+            info!("{:?}", navmeshes)
+        }
     }
-
-    // Here's the important bit:
-
-    // Spawn the tilemap with a `Navmeshes` component
-    commands
-        .spawn(Navmeshes::generate(MAP_SIZE, TILE_SIZE, navability, [PLAYER_CLEARANCE]).unwrap());
-
-    // Spawn the player component. A position component is necessary. We will add `NavBundle`
-    // later.
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform::from_translation((player_pos + TILE_SIZE / 2.).extend(1.)),
-            texture: asset_server.load("player.png"),
-            ..default()
-        },
-        Player,
-    ));
 }
 
 // Navigate the player to wherever you click
@@ -100,7 +91,7 @@ fn move_player(
             commands.entity(players.single()).insert(NavBundle {
                 pathfind: Pathfind::new(
                     navmesheses.single(),
-                    PLAYER_CLEARANCE,
+                    UNIT_SIZE - 0.01,
                     None,
                     PathTarget::Static(cursor_pos),
                     NavQuery::Accuracy,
@@ -112,26 +103,17 @@ fn move_player(
     }
 }
 
-// The code after this comment is not related to `seldom_map_nav`
-
-#[derive(Component)]
-struct Player;
-
-#[derive(Default, Deref, DerefMut, Resource)]
-struct CursorPos(Option<Vec2>);
+#[derive(Default, Deref, DerefMut, Resource, Reflect)]
+pub struct CursorPos(Option<Vec2>);
 
 fn update_cursor_pos(
-    cameras: Query<&Transform, With<Camera2d>>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     windows: Query<&Window>,
     mut pos: ResMut<CursorPos>,
 ) {
-    let window = windows.single();
-    **pos = window.cursor_position().map(|cursor_pos| {
-        (cameras.single().compute_matrix()
-            * (cursor_pos - Vec2::new(window.width(), window.height()) / 2.)
-                .extend(0.)
-                .extend(1.))
-        .truncate()
-        .truncate()
-    });
+    let (camera, camera_transform) = camera_query.single();
+    let Some(cursor_position) = windows.single().cursor_position() else {return;};
+    let cursor_world_position = camera.viewport_to_world_2d(camera_transform, cursor_position);
+
+    **pos = cursor_world_position;
 }
