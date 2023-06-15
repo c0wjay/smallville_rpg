@@ -15,7 +15,7 @@ pub struct Delay(pub Timer);
 
 impl Default for Delay {
     fn default() -> Self {
-        Delay(Timer::from_seconds(0.5, TimerMode::Once))
+        Delay(Timer::from_seconds(0., TimerMode::Once))
     }
 }
 

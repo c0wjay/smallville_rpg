@@ -27,13 +27,13 @@ pub enum AppState {
 }
 
 // TODO: Code need to be modified when multiplayer feature is implemented.
-pub fn move_lock_system(mut query: Query<&mut MoveLock>) {
+pub fn move_lock_system(mut query: Query<&mut MoveLock, With<Player>>) {
     for mut move_lock in query.iter_mut() {
         move_lock.0 = true;
     }
 }
 
-pub fn move_unlock_system(mut query: Query<(&mut MoveLock, &Delay), With<Player>>) {
+pub fn move_unlock_system(mut query: Query<(&mut MoveLock, &Delay)>) {
     for (mut move_lock, delay) in query.iter_mut() {
         if delay.0.finished() && move_lock.0 {
             move_lock.0 = false;

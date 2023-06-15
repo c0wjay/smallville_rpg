@@ -74,6 +74,7 @@ pub struct NPCBundle {
     pub ysort: YSort,
     pub delay: Delay,
     pub hurtbox: Hurtbox,
+    pub move_lock: MoveLock,
     pub coordinate: Coordinate,
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]

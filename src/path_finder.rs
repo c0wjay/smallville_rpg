@@ -18,8 +18,10 @@ impl Plugin for AIPlugin {
             // The type parameter is the position component that you use
             .add_plugin(MapNavPlugin::<Transform>::default())
             .init_resource::<CursorPos>()
+            .add_event::<OrderMovementEvent>()
             .add_system(setup.after(insert_wall))
-            .add_systems((update_cursor_pos, move_player).chain());
+            .add_systems((update_cursor_pos, move_player_when_mouse_click).chain())
+            .add_system(processing_order_movement_event);
     }
 }
 
@@ -74,35 +76,7 @@ fn setup(
     }
 }
 
-// Navigate the player to wherever you click
-fn move_player(
-    mut commands: Commands,
-    players: Query<Entity, With<Player>>,
-    navmesheses: Query<Entity, With<Navmeshes>>,
-    cursor_pos: Res<CursorPos>,
-    mouse: Res<Input<MouseButton>>,
-) {
-    if mouse.just_pressed(MouseButton::Right) {
-        if let Some(cursor_pos) = **cursor_pos {
-            // Clicked somewhere on the screen!
-            // Add `NavBundle` to start navigating to that position
-            // If you want to write your own movement, but still want paths generated,
-            // only insert `Pathfind`.
-            commands.entity(players.single()).insert(NavBundle {
-                pathfind: Pathfind::new(
-                    navmesheses.single(),
-                    UNIT_SIZE - 0.01,
-                    None,
-                    PathTarget::Static(cursor_pos),
-                    NavQuery::Accuracy,
-                    NavPathMode::Accuracy,
-                ),
-                nav: Nav::new(200.),
-            });
-        }
-    }
-}
-
+// TODO: CursorPos should be moduled into `input.rs`
 #[derive(Default, Deref, DerefMut, Resource, Reflect)]
 pub struct CursorPos(Option<Vec2>);
 
@@ -116,4 +90,54 @@ fn update_cursor_pos(
     let cursor_world_position = camera.viewport_to_world_2d(camera_transform, cursor_position);
 
     **pos = cursor_world_position;
+}
+
+// Navigate the player to wherever you click
+fn move_player_when_mouse_click(
+    players: Query<Entity, With<Player>>,
+    cursor_pos: Res<CursorPos>,
+    mouse: Res<Input<MouseButton>>,
+    mut movement_writer: EventWriter<OrderMovementEvent>,
+) {
+    if mouse.just_pressed(MouseButton::Right) {
+        if let Some(cursor_pos) = **cursor_pos {
+            // Clicked somewhere on the screen!
+            movement_writer.send(OrderMovementEvent {
+                entity: players.single(),
+                destination: cursor_pos,
+            });
+        }
+    }
+}
+
+pub struct OrderMovementEvent {
+    pub entity: Entity,
+    pub destination: Vec2,
+}
+
+pub fn processing_order_movement_event(
+    mut commands: Commands,
+    mut events: EventReader<OrderMovementEvent>,
+    navmesheses: Query<Entity, With<Navmeshes>>,
+) {
+    for OrderMovementEvent {
+        entity,
+        destination,
+    } in events.iter()
+    {
+        // Add `NavBundle` to start navigating to that position
+        // If you want to write your own movement, but still want paths generated,
+        // only insert `Pathfind`.
+        commands.entity(*entity).insert(NavBundle {
+            pathfind: Pathfind::new(
+                navmesheses.single(),
+                UNIT_SIZE - 0.01,
+                None,
+                PathTarget::Static(*destination),
+                NavQuery::Accuracy,
+                NavPathMode::Accuracy,
+            ),
+            nav: Nav::new(100.),
+        });
+    }
 }

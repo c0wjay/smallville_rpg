@@ -1,21 +1,20 @@
 use bevy::{
-    prelude::{
-        Bundle, Commands, Component, Deref, DerefMut, Query, Res, ResMut, Resource, Transform, With,
-    },
+    prelude::{Bundle, Component, Deref, DerefMut, Query, Res, Transform, With},
     reflect::Reflect,
     sprite::TextureAtlasSprite,
     time::{Time, Timer, TimerMode},
 };
 
-use crate::units::Player;
+use crate::units::{Player, NPC};
 
 #[derive(Clone, Default, Bundle)]
 pub struct AnimationBundle {
     pub animation_indices: AnimationIndices,
     pub facing: Facing,
+    pub animation_timer: AnimationTimer,
 }
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
 pub struct AnimationIndices {
     pub first: usize,
     pub last: usize,
@@ -23,7 +22,7 @@ pub struct AnimationIndices {
     pub animation_state: AnimationState,
 }
 
-#[derive(Component, Default, Clone, PartialEq, Eq)]
+#[derive(Component, Default, Clone, PartialEq, Eq, Reflect)]
 pub enum AnimationState {
     #[default]
     Idle,
@@ -47,7 +46,7 @@ pub enum FaceDirection {
     Right,
 }
 
-#[derive(Resource, Deref, DerefMut, Clone)]
+#[derive(Component, Deref, DerefMut, Clone)]
 pub struct AnimationTimer(pub Timer);
 
 impl Default for AnimationTimer {
@@ -64,25 +63,25 @@ pub struct YSort {
     pub z: f32,
 }
 
-pub fn setup(mut commands: Commands) {
-    commands.insert_resource(AnimationTimer(Timer::from_seconds(
-        0.1,
-        TimerMode::Repeating,
-    )));
-}
-
 // pub fn sprite_size(mut query: Query<&mut TextureAtlasSprite, Or<(With<Player>, With<NPC>)>>) {
 //     for mut sprite in &mut query {
 //         sprite.custom_size = Some(Vec2::new(24., 24.));
 //     }
 // }
 
-pub fn animate_sprite(
+pub fn animate_player_sprite(
     time: Res<Time>,
-    mut timer: ResMut<AnimationTimer>,
-    mut query: Query<(&mut TextureAtlasSprite, &Facing, &mut AnimationIndices), With<Player>>,
+    mut query: Query<
+        (
+            &mut AnimationTimer,
+            &mut TextureAtlasSprite,
+            &Facing,
+            &mut AnimationIndices,
+        ),
+        With<Player>,
+    >,
 ) {
-    for (mut sprite, facing, mut indices) in &mut query {
+    for (mut timer, mut sprite, facing, mut indices) in &mut query {
         timer.tick(time.delta());
         if timer.just_finished() {
             // Facing
@@ -137,6 +136,53 @@ pub fn animate_sprite(
                             36 + temp_index
                         }
                     }
+                };
+            }
+        }
+    }
+}
+
+pub fn animate_npc_sprite(
+    time: Res<Time>,
+    mut query: Query<
+        (
+            &mut AnimationTimer,
+            &mut TextureAtlasSprite,
+            &Facing,
+            &mut AnimationIndices,
+        ),
+        With<NPC>,
+    >,
+) {
+    for (mut timer, mut sprite, facing, mut indices) in &mut query {
+        timer.tick(time.delta());
+        if timer.just_finished() {
+            // Reset to first frame if idle
+            if indices.animation_state == AnimationState::Idle {
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => 0,
+                    FaceDirection::Right => 4,
+                    FaceDirection::Up => 8,
+                    FaceDirection::Left => 12,
+                };
+                indices.current = 0;
+                break;
+            }
+
+            // Move to next frame
+            indices.current = if indices.current == indices.last {
+                indices.first
+            } else {
+                indices.current + 1
+            };
+
+            // Walking animation
+            if indices.animation_state == AnimationState::Walk {
+                sprite.index = match facing.direction {
+                    FaceDirection::Down => indices.current,
+                    FaceDirection::Right => 4 + indices.current,
+                    FaceDirection::Up => 8 + indices.current,
+                    FaceDirection::Left => 12 + indices.current,
                 };
             }
         }

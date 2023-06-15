@@ -58,7 +58,7 @@ pub fn melee_attack(
                     hitstun_duration: 1.,
                 })
                 .id();
-            *delay = Delay(Timer::from_seconds(1., TimerMode::Once));
+            *delay = Delay(Timer::from_seconds(0.8, TimerMode::Once));
             commands.entity(entity).push_children(&[attack_entity]);
 
             move_lock.0 = true;

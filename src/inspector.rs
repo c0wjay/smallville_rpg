@@ -16,6 +16,7 @@ impl Plugin for InspectorPlugin {
             .register_type::<maps::Coordinate>()
             .register_type::<combat::Delay>()
             .register_type::<ui::ConsoleData>()
+            .register_type::<sprites::AnimationIndices>()
             .register_type::<seldom_map_nav::prelude::Pathfind>()
             .register_type::<seldom_map_nav::prelude::Nav>();
     }

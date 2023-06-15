@@ -19,7 +19,9 @@ use sysinfo::{ProcessorExt, System, SystemExt};
 use bevy_tokio_tasks::TokioTasksRuntime;
 
 use crate::{
+    constants::{GRID_OFFSET, GRID_SIZE},
     maps::{Coordinate, EntityGridMap},
+    path_finder::OrderMovementEvent,
     sprites::{FaceDirection, Facing},
     state::AppState,
     units::{CurrentInteractingNPC, Player, NPC},
@@ -640,7 +642,6 @@ pub fn handle_input_keys(
                                 }
                             }
                             KeyCode::Plus | KeyCode::NumpadAdd => data.typed_command.push('+'),
-                            KeyCode::Key0 | KeyCode::Numpad0 => data.typed_command.push('0'),
                             KeyCode::Key1 | KeyCode::Numpad1 => data.typed_command.push('1'),
                             KeyCode::Key2 | KeyCode::Numpad2 => data.typed_command.push('2'),
                             KeyCode::Key3 | KeyCode::Numpad3 => data.typed_command.push('3'),
@@ -649,7 +650,24 @@ pub fn handle_input_keys(
                             KeyCode::Key6 | KeyCode::Numpad6 => data.typed_command.push('6'),
                             KeyCode::Key7 | KeyCode::Numpad7 => data.typed_command.push('7'),
                             KeyCode::Key8 | KeyCode::Numpad8 => data.typed_command.push('8'),
-                            KeyCode::Key9 | KeyCode::Numpad9 => data.typed_command.push('9'),
+                            KeyCode::Key9 | KeyCode::Numpad9 => {
+                                if keyboard_input.pressed(KeyCode::LShift)
+                                    || keyboard_input.pressed(KeyCode::RShift)
+                                {
+                                    data.typed_command.push('(');
+                                } else {
+                                    data.typed_command.push('9');
+                                }
+                            }
+                            KeyCode::Key0 | KeyCode::Numpad0 => {
+                                if keyboard_input.pressed(KeyCode::LShift)
+                                    || keyboard_input.pressed(KeyCode::RShift)
+                                {
+                                    data.typed_command.push(')');
+                                } else {
+                                    data.typed_command.push('0');
+                                }
+                            }
 
                             KeyCode::LShift
                             | KeyCode::RShift
@@ -715,6 +733,7 @@ pub fn commands_handler(
     mut commands: Commands,
     mut cmd_reader: EventReader<EnteredConsoleCommandEvent>,
     mut console_writer: EventWriter<PrintConsoleEvent>,
+    mut movement_writer: EventWriter<OrderMovementEvent>,
     player_query: Query<&Name, With<Player>>,
     npc_query: Query<(&Children, &Name), With<NPC>>,
     mut data_query: Query<&mut ConsoleData>,
@@ -787,6 +806,55 @@ pub fn commands_handler(
                             //     })
                             //     .id();
                             // commands.entity(*npc).push_children(&[ask_gpt]);
+                        }
+                        "go" => {
+                            if args.len() != 2 {
+                                console_writer.send(PrintConsoleEvent {
+                                    npc: *npc,
+                                    message: "Please type command as 'go (x,y)'".to_string(),
+                                });
+                                return;
+                            }
+                            let message = args[1];
+                            let elements: Vec<&str> = message
+                                .trim_matches(|p| p == '(' || p == ')')
+                                .split(',')
+                                .collect();
+
+                            if elements.len() == 2 {
+                                let x: Option<i32> = elements[0].parse().ok();
+                                let y: Option<i32> = elements[1].parse().ok();
+
+                                if let (Some(x), Some(y)) = (x, y) {
+                                    console_writer.send(PrintConsoleEvent {
+                                        npc: *npc,
+                                        message: format!(
+                                            "{} will be move to ({}, {})",
+                                            npc_name.as_str(),
+                                            x,
+                                            y
+                                        ),
+                                    });
+
+                                    let x = x as f32 * GRID_SIZE + GRID_OFFSET;
+                                    let y = y as f32 * GRID_SIZE + GRID_OFFSET;
+                                    // TODO: emit MovementEvent, to order npc to move
+                                    movement_writer.send(OrderMovementEvent {
+                                        entity: *npc,
+                                        destination: (x, y).into(),
+                                    })
+                                } else {
+                                    console_writer.send(PrintConsoleEvent {
+                                        npc: *npc,
+                                        message: "Please type correct coordination.".to_string(),
+                                    });
+                                }
+                            } else {
+                                console_writer.send(PrintConsoleEvent {
+                                    npc: *npc,
+                                    message: "Please type correct coordination.".to_string(),
+                                });
+                            }
                         }
 
                         _ => {
@@ -867,6 +935,7 @@ fn display_help() -> String {
     res.push_str("- clear : Clears commands on the screen\n");
     res.push_str("- motd : Prints informations about YOUR computer\n");
     res.push_str("- ask <questions> : ask some questions to chatGPT\n");
+    res.push_str("-go <(x,y)>: order npc to move to (x, y) position");
 
     res
 }
