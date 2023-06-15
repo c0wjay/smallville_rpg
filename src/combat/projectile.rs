@@ -1,4 +1,4 @@
-use bevy::prelude::{info, Commands, Entity, EventReader, EventWriter, Parent, Query, With};
+use bevy::prelude::{error, info, Commands, Entity, EventReader, EventWriter, Parent, Query, With};
 use bevy_rapier2d::prelude::CollisionEvent;
 
 use crate::combat::Attack;
@@ -37,7 +37,7 @@ pub fn projectile_attack_system(
                     });
                     break;
                 }
-                info!("message should not be shown");
+                error!("message should not be shown");
             }
         }
     }

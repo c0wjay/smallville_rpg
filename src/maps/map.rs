@@ -1,6 +1,6 @@
 use bevy::prelude::{
-    info, Added, Changed, Component, Entity, GlobalTransform, Handle, Parent, Query, Reflect,
-    ResMut, Resource, Transform, With, Without,
+    Added, Changed, Component, Entity, GlobalTransform, Handle, Parent, Query, Reflect, ResMut,
+    Resource, Transform, With, Without,
 };
 use bevy_ecs_ldtk::LdtkLevel;
 use bevy_ecs_tilemap::tiles::TilePos;
@@ -258,9 +258,6 @@ pub fn insert_floor(
                 let x = ((translation.x - GRID_OFFSET) / GRID_SIZE) as i32;
                 let y = ((translation.y - GRID_OFFSET) / GRID_SIZE) as i32;
                 tile_map.insert((x, y), entity, TileType::Floor);
-                if x == 0 || y == 0 {
-                    info!("insert floor: {:?}, {:?}", entity, (x, y));
-                }
             }
         }
     }

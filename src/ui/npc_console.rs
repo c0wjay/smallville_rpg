@@ -19,9 +19,9 @@ use sysinfo::{ProcessorExt, System, SystemExt};
 use bevy_tokio_tasks::TokioTasksRuntime;
 
 use crate::{
+    ai::OrderMovementEvent,
     constants::{GRID_OFFSET, GRID_SIZE},
     maps::{Coordinate, EntityGridMap},
-    path_finder::OrderMovementEvent,
     sprites::{FaceDirection, Facing},
     state::AppState,
     units::{CurrentInteractingNPC, Player, NPC},
@@ -903,7 +903,7 @@ pub fn send_message_to_chatgpt(runtime: ResMut<TasksRuntime>, mut ask_gpt: ResMu
                 .await;
             }
             Err(_) => {
-                info!("Failed to receive message to chatGPT");
+                error!("Failed to receive message to chatGPT");
             }
         }
     });
@@ -916,7 +916,7 @@ pub fn handle_tasks(
     mut console_writer: EventWriter<PrintConsoleEvent>,
 ) {
     for (entity, task) in &gpt_tasks {
-        warn!("Polling future: {:?}", task);
+        info!("Polling future: {:?}", task);
         console_writer.send(PrintConsoleEvent {
             npc: task.npc,
             message: task.message.clone(),

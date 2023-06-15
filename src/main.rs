@@ -1,16 +1,19 @@
 // This example shows off a more in-depth implementation of a game with `bevy_ecs_ldtk`.
 // Please run with `--release`.
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::{App, ImagePlugin, PluginGroup},
+    DefaultPlugins,
+};
 use bevy_ecs_ldtk::prelude::LdtkPlugin;
-use bevy_rapier2d::prelude::*;
+use bevy_rapier2d::prelude::{NoUserData, RapierPhysicsPlugin};
 
+mod ai;
 mod camera;
 mod combat;
 mod constants;
 mod inspector;
 mod maps;
-mod path_finder;
 mod physics;
 mod sprites;
 mod state;
@@ -31,7 +34,7 @@ fn main() {
         // StatePlugin should be front of ConsolePlugin due to `add_state`.
         .add_plugin(state::StatePlugin)
         .add_plugin(ui::ConsolePlugin)
-        .add_plugin(path_finder::AIPlugin)
+        .add_plugin(ai::AIPlugin)
         .add_plugin(inspector::InspectorPlugin)
         .run();
 }

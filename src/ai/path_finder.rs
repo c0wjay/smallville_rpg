@@ -1,31 +1,25 @@
 // In this game, the player navigates to wherever you click
 
-use bevy::prelude::*;
-use seldom_map_nav::prelude::*;
+use bevy::{
+    prelude::{
+        error, Camera, Camera2d, Commands, Deref, DerefMut, DetectChanges, Entity, EventReader,
+        EventWriter, GlobalTransform, Input, MouseButton, Query, Res, ResMut, Resource, UVec2,
+        Vec2, With,
+    },
+    reflect::Reflect,
+    window::Window,
+};
+use seldom_map_nav::prelude::{
+    Nav, NavBundle, NavPathMode, NavQuery, Navability, Navmeshes, PathTarget, Pathfind,
+};
 
 use crate::{
     constants::{GRID_SIZE, UNIT_SIZE},
-    maps::{insert_wall, TileGridMap, TileType},
+    maps::{TileGridMap, TileType},
     units::Player,
 };
 
-pub struct AIPlugin;
-
-impl Plugin for AIPlugin {
-    fn build(&self, app: &mut App) {
-        app
-            // This plugin is required for pathfinding and navigation
-            // The type parameter is the position component that you use
-            .add_plugin(MapNavPlugin::<Transform>::default())
-            .init_resource::<CursorPos>()
-            .add_event::<OrderMovementEvent>()
-            .add_system(setup.after(insert_wall))
-            .add_systems((update_cursor_pos, move_player_when_mouse_click).chain())
-            .add_system(processing_order_movement_event);
-    }
-}
-
-fn setup(
+pub fn setup(
     mut commands: Commands,
     tile_grid_map: Res<TileGridMap>,
     navmesheses: Query<Entity, With<Navmeshes>>,
@@ -50,9 +44,6 @@ fn setup(
 
         let navability = |pos: UVec2| tilemap[(pos.y * (max_x as u32 + 1) + pos.x) as usize];
 
-        // Here's the important bit:
-        warn!("{:?}, {:?}", tilemap.len(), (max_x + 1) * (max_y + 1));
-
         // Spawn the tilemap with a `Navmeshes` component
         let navmeshes = Navmeshes::generate(
             UVec2::new(max_x as u32 + 1, max_y as u32 + 1),
@@ -64,14 +55,12 @@ fn setup(
         // Unit size radius is slightly smaller than half of grid size.
         // This prevent Triangulation Error.
         if let Ok(navmeshes) = navmeshes {
-            warn!("Do");
             for entity in navmesheses.iter() {
                 commands.entity(entity).despawn();
             }
-            // info!("Tilemap: {:?}", &navmeshes);
             commands.spawn(navmeshes);
         } else {
-            info!("{:?}", navmeshes)
+            error!("Navmeshes error: {:?}", navmeshes)
         }
     }
 }
@@ -80,7 +69,7 @@ fn setup(
 #[derive(Default, Deref, DerefMut, Resource, Reflect)]
 pub struct CursorPos(Option<Vec2>);
 
-fn update_cursor_pos(
+pub fn update_cursor_pos(
     camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     windows: Query<&Window>,
     mut pos: ResMut<CursorPos>,
@@ -93,7 +82,7 @@ fn update_cursor_pos(
 }
 
 // Navigate the player to wherever you click
-fn move_player_when_mouse_click(
+pub fn move_player_when_mouse_click(
     players: Query<Entity, With<Player>>,
     cursor_pos: Res<CursorPos>,
     mouse: Res<Input<MouseButton>>,

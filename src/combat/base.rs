@@ -1,7 +1,7 @@
 use bevy::{
     prelude::{
-        info, warn, Commands, Component, Deref, DerefMut, DespawnRecursiveExt, Entity, EventReader,
-        Or, Parent, Query, ReflectComponent, Res, Vec2, Visibility, With,
+        info, Commands, Component, Deref, DerefMut, DespawnRecursiveExt, Entity, EventReader, Or,
+        Parent, Query, ReflectComponent, Res, Vec2, Visibility, With,
     },
     reflect::Reflect,
     time::{Time, Timer, TimerMode},
@@ -88,7 +88,6 @@ pub fn deactivate_attack(
             let delay = &mut delay.unwrap().0;
             delay.tick(time.delta());
             if delay.finished() {
-                warn!("Attack {:?} demolished", entity);
                 commands.entity(entity).despawn_recursive();
             }
         }
