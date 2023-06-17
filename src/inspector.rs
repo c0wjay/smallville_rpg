@@ -18,6 +18,11 @@ impl Plugin for InspectorPlugin {
             .register_type::<ui::ConsoleData>()
             .register_type::<sprites::AnimationIndices>()
             .register_type::<seldom_map_nav::prelude::Pathfind>()
-            .register_type::<seldom_map_nav::prelude::Nav>();
+            .register_type::<seldom_map_nav::prelude::Nav>()
+            .register_type::<ai::Distance>()
+            .register_type::<ai::Approach>()
+            .register_type::<big_brain::thinker::Actor>()
+            .register_type::<big_brain::scorers::Score>()
+            .register_type::<big_brain::actions::ActionState>();
     }
 }

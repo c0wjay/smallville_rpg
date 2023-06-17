@@ -92,16 +92,18 @@ pub fn move_player_when_mouse_click(
         if let Some(cursor_pos) = **cursor_pos {
             // Clicked somewhere on the screen!
             movement_writer.send(OrderMovementEvent {
-                entity: players.single(),
-                destination: cursor_pos,
+                mover: players.single(),
+                destination: PathTarget::Static(cursor_pos),
+                speed: 100.,
             });
         }
     }
 }
 
 pub struct OrderMovementEvent {
-    pub entity: Entity,
-    pub destination: Vec2,
+    pub mover: Entity,
+    pub destination: PathTarget,
+    pub speed: f32,
 }
 
 pub fn processing_order_movement_event(
@@ -110,8 +112,9 @@ pub fn processing_order_movement_event(
     navmesheses: Query<Entity, With<Navmeshes>>,
 ) {
     for OrderMovementEvent {
-        entity,
+        mover: entity,
         destination,
+        speed,
     } in events.iter()
     {
         // Add `NavBundle` to start navigating to that position
@@ -122,11 +125,11 @@ pub fn processing_order_movement_event(
                 navmesheses.single(),
                 UNIT_SIZE - 0.01,
                 None,
-                PathTarget::Static(*destination),
+                *destination,
                 NavQuery::Accuracy,
                 NavPathMode::Accuracy,
             ),
-            nav: Nav::new(100.),
+            nav: Nav::new(*speed),
         });
     }
 }

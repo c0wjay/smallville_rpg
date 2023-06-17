@@ -13,6 +13,7 @@ use bevy::{
 use chatgpt::prelude::ChatGPT;
 #[allow(unused_imports)]
 use rand::Rng;
+use seldom_map_nav::prelude::PathTarget;
 use sysinfo::{ProcessorExt, System, SystemExt};
 
 #[cfg(not(target_family = "wasm"))]
@@ -838,10 +839,11 @@ pub fn commands_handler(
 
                                     let x = x as f32 * GRID_SIZE + GRID_OFFSET;
                                     let y = y as f32 * GRID_SIZE + GRID_OFFSET;
-                                    // TODO: emit MovementEvent, to order npc to move
+                                    // Emit MovementEvent, to order npc to move
                                     movement_writer.send(OrderMovementEvent {
-                                        entity: *npc,
-                                        destination: (x, y).into(),
+                                        mover: *npc,
+                                        destination: PathTarget::Static((x, y).into()),
+                                        speed: 100.,
                                     })
                                 } else {
                                     console_writer.send(PrintConsoleEvent {
