@@ -21,6 +21,7 @@ pub enum AppState {
     #[default]
     MainGame,
     ConsoleOpenedState,
+    InventoryOpenedState,
     GamePausedState,
     MainMenu,
     ControlMenu,

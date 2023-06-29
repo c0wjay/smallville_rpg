@@ -102,6 +102,7 @@ pub fn push_message_events_to_console(
     }
 }
 
+// TODO: maybe integrate all UI Animation Resources to be one(`UIAnimation`).
 #[derive(Default, Resource)]
 pub struct ConsoleAnimation {
     pub start_position: Vec2,
@@ -136,6 +137,7 @@ pub fn spawn_console_data_in_npc(
     }
 }
 
+// TODO: Refactor function name. Unify to `setup_something`.
 pub fn build_ui(
     mut commands: Commands,
     mut anim_data: ResMut<ConsoleAnimation>,

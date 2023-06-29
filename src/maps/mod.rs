@@ -25,6 +25,7 @@ impl Plugin for MapPlugin {
                 set_clear_color: SetClearColor::FromLevelBackground,
                 ..Default::default()
             })
+            // TODO: Maybe we can use init_resource when we `impl Default` with using `new` as `default` function for `EntityGridMap` and `TileGridMap`.
             .insert_resource(map::EntityGridMap::new())
             .insert_resource(map::TileGridMap::new())
             .register_ldtk_int_cell::<WallBundle>(1)

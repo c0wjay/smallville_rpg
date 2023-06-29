@@ -1,6 +1,6 @@
 use bevy::{
     prelude::{
-        debug, warn, Added, Commands, Component, Entity, EventWriter, Query, Res, Transform, With,
+        debug, Added, Commands, Component, Entity, EventWriter, Query, Res, Transform, With,
     },
     reflect::Reflect,
 };
@@ -14,7 +14,7 @@ use seldom_map_nav::prelude::PathTarget;
 use crate::{
     constants::GRID_SIZE,
     maps::{Coordinate, EntityGridMap},
-    units::NPC,
+    units::{Player, NPC},
 };
 
 use super::OrderMovementEvent;
@@ -68,7 +68,9 @@ impl Distance {
 pub fn push_target_in_range(
     entity_map: Res<EntityGridMap>,
     mut actor_query: Query<(Entity, &Coordinate, &Transform, &mut Distance)>,
-    transform_query: Query<&Transform>,
+    // TODO: Currently, only entity with player tag can be pushed into NPC's target, to prevent NPCs from targeting each other and making Dead lock.
+    // But, need to be modified.
+    transform_query: Query<&Transform, With<Player>>,
 ) {
     for (actor_entity, actor_coordinate, actor_transform, mut distance) in actor_query.iter_mut() {
         // If I use this checking code, target will not be changed until it is out of range.

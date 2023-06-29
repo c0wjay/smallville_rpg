@@ -4,8 +4,10 @@ use bevy::prelude::{
 };
 use bevy_tokio_tasks::TokioTasksPlugin;
 
+pub mod inventory;
 pub mod npc_console;
 use crate::state;
+pub use inventory::*;
 pub use npc_console::*;
 
 pub struct ConsolePlugin;
